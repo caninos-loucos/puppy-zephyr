@@ -1,0 +1,10 @@
+identifier: poodle-toy-v1
+name: Poodle Toy v1.0
+type: mcu
+arch: riscv32
+toolchain:
+  - zephyr
+testing:
+  ignore_tags:
+    - net
+    - bluetooth

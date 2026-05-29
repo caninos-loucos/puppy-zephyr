@@ -1,0 +1,5 @@
+series:
+- name: puppy
+  socs:
+  - name: puppy_v1
+  - name: puppy_v2

@@ -1,0 +1,16 @@
+description: >
+  This is a representation of the Puppy SPI node
+
+include: [spi-controller.yaml, base.yaml]
+
+compatible: "caninos,puppy-spi"
+
+properties:
+  reg:
+    required: true
+    description: mmio register space
+
+  spi-id:
+    required: true
+    type: int
+    description: ID of the SPI instance

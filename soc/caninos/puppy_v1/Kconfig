@@ -1,0 +1,12 @@
+config SOC_PUPPY_V1
+	bool
+	select RISCV
+	select RISCV_PUPPY
+	select RISCV_ISA_RV32I
+	select RISCV_ISA_EXT_M
+	select RISCV_ISA_EXT_F
+	select RISCV_ISA_EXT_C
+	select RISCV_ISA_EXT_ZICSR
+	select ATOMIC_OPERATIONS_C
+
+

@@ -1,0 +1,7 @@
+
+config PWM_PUPPY
+	bool "Puppy PWM Driver"
+	default y
+	depends on DT_HAS_CANINOS_PUPPY_PWM_ENABLED
+	help
+	  Enable PWM driver for Puppy MCUs.

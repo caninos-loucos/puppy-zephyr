@@ -1,0 +1,23 @@
+description: >
+    This is a representation of the Puppy GPIO node
+
+include: [gpio-controller.yaml, base.yaml]
+
+compatible: "caninos,puppy-gpio"
+
+properties:
+
+    reg:
+      required: true
+      description: mmio register space
+
+    interrupts:
+      required: true
+      description: required interrupts
+
+    "#gpio-cells":
+      const: 2
+
+gpio-cells:
+  - pin
+  - flags

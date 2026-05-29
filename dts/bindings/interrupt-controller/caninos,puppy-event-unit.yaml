@@ -1,0 +1,17 @@
+description: >
+    This binding describes the Puppy Event Unit
+
+include: [interrupt-controller.yaml, base.yaml]
+
+compatible: "caninos,puppy-event-unit"
+
+properties:
+  reg:
+      required: true
+      description: mmio register space
+
+  "#interrupt-cells":
+      const: 1
+
+interrupt-cells:
+  - irq

@@ -1,0 +1,17 @@
+# Kconfig.puppy - puppy I2C configuration option
+
+config I2C_PUPPY
+	bool "Puppy I2C controller driver"
+	default y
+	depends on DT_HAS_CANINOS_PUPPY_I2C_ENABLED
+	select HAS_DTS_I2C
+	help
+	  Enable driver for the Puppy I2C controller.
+
+	  Says n if not sure.
+
+config I2C_W_BLOCKING
+    bool
+    default y
+    help
+      Write funtion is of blocking type until end of transfer.

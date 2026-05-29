@@ -1,0 +1,11 @@
+# Kconfig.puppy - puppy SPI configuration option
+
+config SPI_PUPPY
+	bool "Puppy SPI controller driver"
+	default y
+	depends on DT_HAS_CANINOS_PUPPY_SPI_ENABLED
+	select HAS_DTS_SPI
+	help
+	  Enable driver for the Puppy SPI controller.
+
+	  Says n if not sure.

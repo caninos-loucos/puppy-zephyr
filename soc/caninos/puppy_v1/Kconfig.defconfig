@@ -1,0 +1,39 @@
+if SOC_PUPPY_V1
+
+config SYS_CLOCK_HW_CYCLES_PER_SEC
+	int
+	default 20000000
+
+config SYS_CLOCK_TICKS_PER_SEC
+	int
+	default 31250
+
+config RISCV_SOC_CONTEXT_SAVE
+	bool
+	default y
+
+config RISCV_HAS_CPU_IDLE
+	bool
+	default y
+
+config INCLUDE_RESET_VECTOR
+	bool
+	default y
+
+config NUM_IRQS
+	int
+	default 32
+
+config MP_MAX_NUM_CPUS
+    default 1
+
+config HAS_FLASH_LOAD_OFFSET
+    bool
+    default y
+    depends on BOOTLOADER_MCUBOOT
+
+config TIMER_HAS_64BIT_CYCLE_COUNTER
+	bool
+	default y
+
+endif # SOC_PUPPY

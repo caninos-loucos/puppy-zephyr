@@ -1,0 +1,16 @@
+description: >
+  This is a representation of the Puppy UART node
+
+include: [uart-controller.yaml, base.yaml]
+
+compatible: "caninos,puppy-uart"
+
+properties:
+  reg:
+    required: true
+    description: mmio register space
+
+  uart-id:
+    required: true
+    type: int
+    description: ID of the hardware UART instance

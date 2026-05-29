@@ -1,0 +1,24 @@
+description: >
+  This is a representation of the Puppy I2C node
+
+include: [i2c-controller.yaml, base.yaml]
+
+compatible: "caninos,puppy-i2c"
+
+properties:
+  reg:
+    required: true
+    description: mmio register space
+
+  i2c-id:
+    required: true
+    type: int
+    description: ID of the I2C hardware instance
+
+  sda-pin:
+    type: int
+    description: SDA pin select number used only for I2C1
+
+  scl-pin:
+    type: int
+    description: SCL pin select number used only for I2C1

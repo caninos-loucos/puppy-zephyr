@@ -1,0 +1,2 @@
+config BOARD_POODLE_TOY_V1
+	select SOC_PUPPY_V2

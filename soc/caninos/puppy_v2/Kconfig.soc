@@ -1,0 +1,6 @@
+config SOC_PUPPY_V2
+	bool
+	select SOC_SERIES_PUPPY
+
+config SOC
+	default "puppy_v2" if SOC_PUPPY_V2

@@ -1,0 +1,131 @@
+#include <caninos/puppy_v2.dtsi>
+#include <mem.h>
+
+/ {
+    model = "poodle-toy-v1";
+    compatible = "caninos,poodle-toy-v1";
+
+    chosen {
+		mcuboot,ram-load-dev = &sram;
+		zephyr,code-partition = &slot0_partition;
+		zephyr,flash-controller = &spi0;
+		zephyr,sram = &sram;
+		zephyr,flash = &flash0;
+		zephyr,console = &uart0;
+        zephyr,shell-uart = &uart0;
+    };
+
+	aliases {
+		led0 = &led0;
+		mcuboot-led0 = &led0;
+		eeprom-0 = &flash0;
+	};
+
+	leds {
+		compatible = "gpio-leds";
+
+		led0: led_0 {
+			gpios = <&gpio0 23 GPIO_ACTIVE_HIGH>;
+			label = "led0";
+		};
+	};
+
+    arduino_header: connector {
+        compatible = "arduino-header-r3";
+        #gpio-cells = <2>;
+        gpio-map-mask = <0xffffffff 0xffffffc0>;
+        gpio-map-pass-thru = <0 0x3f>;
+        gpio-map = /* A0 - A5 not connected */
+            <6 0 &gpio0 8 0>,	/* D0, also TX */
+            <7 0 &gpio0 7 0>,	/* D1, also RX */
+            <8 0 &gpio0 4 0>,	/* D2, CS0 */
+            <9 0 &gpio0 9 0>,	/* D3 */
+            <10 0 &gpio0 24 0>,	/* D4 */
+            <11 0 &gpio0 10 0>,	/* D5 */
+            <12 0 &gpio0 11 0>,	/* D6 */
+            <13 0 &gpio0 12 0>,	/* D7 */
+            <14 0 &gpio0 13 0>,	/* D8 */
+            <15 0 &gpio0 14 0>,	/* D9 */
+            <16 0 &gpio0 5 0>,	/* D10 */
+            <17 0 &gpio0 0 0>,	/* D11, also MOSI */
+            <18 0 &gpio0 1 0>,	/* D12, also MISO */
+            <19 0 &gpio0 6 0>,	/* D13, also SCK */
+            <20 0 &gpio0 26 0>,	/* D14, also SDA */
+            <21 0 &gpio0 27 0>;	/* D15, also SCL */
+    };
+};
+
+&intc {
+    status = "okay";
+};
+
+&gpio0 {
+    status = "okay";
+};
+
+&pwm1 {
+    status = "okay";
+};
+
+&pwm2 {
+    status = "okay";
+};
+
+&pwm3 {
+    status = "okay";
+};
+
+
+&uart0 {
+    status = "okay";
+    current-speed = <115200>;
+    parity = "none";
+};
+
+&uart1 {
+    status = "okay";
+    current-speed = <115200>;
+    parity = "none";
+};
+
+&spi0 {
+    status = "okay";
+
+    flash0: flash@0 {
+        compatible = "jedec,spi-nor";
+        status = "okay";
+        size = <DT_SIZE_M(8)>;
+        reg = <0>;
+        spi-max-frequency = <20000000>;
+        erase-block-size = <DT_SIZE_K(4)>;
+		write-block-size = <256>;
+
+        partitions {
+            compatible = "fixed-partitions";
+            #size-cells = <1>;
+            #address-cells = <1>;
+
+            boot_partition: partition@0 {
+                reg = <0 0x20000>;
+                label = "boot_partition";
+                read-only;
+            };
+
+            slot0_partition: partition@20000 {
+                reg = <0x20000 0x40000>;
+                label = "slot0";
+            };
+
+            slot1_partition: partition@60000 {
+                reg = <0x60000 0x40000>;
+                label = "slot1";
+            };
+        };
+    };
+};
+
+&i2c0 {
+    status = "okay";
+    clock-frequency = <100000>;
+};
+

@@ -1,0 +1,2 @@
+config BOARD_PUPPY_TESTBOARD
+	select SOC_PUPPY_V1

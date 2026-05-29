@@ -1,0 +1,7 @@
+config SOC_SERIES_PUPPY
+	bool
+
+config SOC_SERIES
+	default "puppy" if SOC_SERIES_PUPPY
+
+rsource "*/Kconfig.soc"
