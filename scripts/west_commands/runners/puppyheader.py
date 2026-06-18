@@ -8,8 +8,6 @@ import ctypes
 from dataclasses import dataclass
 from pathlib import Path
 
-
-
 UINT32_MASK = 0xFFFFFFFF
 
 def div_round_up(n: int, d: int) -> int:
