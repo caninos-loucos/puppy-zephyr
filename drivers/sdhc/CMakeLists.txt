@@ -18,4 +18,6 @@ zephyr_library_sources_ifdef(CONFIG_SDHC_MAX32 sdhc_max32.c)
 zephyr_library_sources_ifdef(CONFIG_SDHC_AMBIQ sdhc_ambiq.c)
 zephyr_library_sources_ifdef(CONFIG_XLNX_SDHC xlnx_sdhc.c)
 zephyr_library_sources_ifdef(CONFIG_SDHC_STM32_SDIO sdhc_stm32.c)
+zephyr_library_sources_ifdef(CONFIG_SDHC_PUPPY sdhc_puppy.c)
+
 endif()

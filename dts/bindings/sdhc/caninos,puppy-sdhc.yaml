@@ -1,0 +1,16 @@
+# Copyright (c) 2026 Caninos Loucos
+# SPDX-License-Identifier: Apache-2.0
+
+description: Puppy SDHC Controller
+
+compatible: "caninos,puppy-sdhc"
+
+include: [sdhc.yaml]
+
+properties:
+  clock-frequency:
+    type: int
+    description: clock-frequency for SDHC
+  reg:
+    required: true
+    description: register space
