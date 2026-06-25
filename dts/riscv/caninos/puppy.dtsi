@@ -83,7 +83,7 @@
 			#pwm-cells = <3>;
 		};
 
-		sdio: sdio@1a102300 {
+		sdhc: sdhc@1a102300 {
 			compatible = "caninos,puppy-sdhc";
 			reg = <0x1a102300 0x80>;
 		};

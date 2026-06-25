@@ -107,3 +107,11 @@
 	sda-pin = <24>;
 	scl-pin = <25>;
 };
+
+&sdhc {
+		mmc {
+			compatible = "zephyr,sdmmc-disk";
+			disk-name = "SD";
+			status = "okay";
+	};
+};
