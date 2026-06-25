@@ -17,13 +17,15 @@ class PuppyProgBinaryRunner(ZephyrBinaryRunner):
                  port: Path | None,
                  timeout: int | None,
                  retries: int | None,
-                 baud: int | None):
+                 baud: int | None,
+                 base_addr: int | None):
         super().__init__(cfg)
         self._tool_path = tool_path or PuppyProgBinaryRunner._get_tool_path()
         self._port = port
         self._timeout = timeout
         self._retries = retries
         self._baud = baud
+        self._base_addr = base_addr
 
     @classmethod
     def name(cls):
@@ -55,15 +57,25 @@ class PuppyProgBinaryRunner(ZephyrBinaryRunner):
                             help="Retry count")
         parser.add_argument("--baud", type=int, required=False,
                             default=115200, help="Serial port baud rate")
+        parser.add_argument('--base-addr', type=int, required=False,
+                            help='Binary base address')
 
     @classmethod
     def do_create(cls, cfg, args):
         return PuppyProgBinaryRunner(cfg, args.tool_path,
                                      args.port, args.timeout,
-                                     args.retries, args.baud)
+                                     args.retries, args.baud, args.base_addr)
 
     def do_run(self, command: str, **kwargs):
         build_conf = BuildConfiguration(self.cfg.build_dir)
+
+        if self._base_addr is None:
+            sram_base_addr = build_conf.get("CONFIG_SRAM_BASE_ADDRESS")
+            if sram_base_addr is not None:
+                try:
+                    self._base_addr = int(str(sram_base_addr), 0)
+                except (ValueError, TypeError):
+                    self._base_addr = None
         if command == "flash":
             if build_conf.getboolean("CONFIG_BOOTLOADER_MCUBOOT"):
                 self._flash_sig_binary(**kwargs)
@@ -74,6 +86,7 @@ class PuppyProgBinaryRunner(ZephyrBinaryRunner):
 
     def _flash_raw_binary(self, **kwargs):
         bin_file = self.cfg.bin_file
+        address = self._base_addr
 
         if bin_file is None:
             raise RuntimeError("no binary file was specified")
@@ -81,17 +94,22 @@ class PuppyProgBinaryRunner(ZephyrBinaryRunner):
             raise RuntimeError(f"file {bin_file} does not exist")
 
         out_file = Path(self.cfg.build_dir) / "flash_output.bin"
-        print(f"Input file: {bin_file}")
-        print(f"Output file: {out_file}")
+        print(f"Input: {bin_file}")
+        print(f"Output: {out_file}")
 
-        maker = PuppyHeaderMaker(Path(bin_file), None, None)
+        maker = PuppyHeaderMaker(Path(bin_file), address, address)
         maker.make_bootable(str(out_file))
 
     def _flash_sig_binary(self, **kwargs):
         self.require(str(self._tool_path))
 
         if self._port is None:
-            raise RuntimeError("no serial port was specified as a backend")
+            if platform.system() == "Darwin":
+                self._port = Path("/dev/tty.SLAB_USBtoUART")
+            elif platform.system() == "Windows":
+                raise RuntimeError("no serial port was specified as a backend")
+            else:
+                self._port = Path("/dev/ttyUSB0")
 
         bin_file = self.cfg.bin_file
 

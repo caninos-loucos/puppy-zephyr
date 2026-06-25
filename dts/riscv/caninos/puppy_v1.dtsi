@@ -16,27 +16,19 @@
 		spi-id = <0>;
 	};
 
-	spi1: spi@1a102180 {
-		compatible = "caninos,puppy-spi";
+	i2c0: i2c@1a102180 {
+		compatible = "caninos,puppy-i2c";
 		#address-cells = <1>;
 		#size-cells = <0>;
-		reg = <0x1a102180 0x28>;
-		spi-id = <1>;
+		reg = <0x1a102180 0x34>;
+		i2c-id = <0>;
 	};
 
-	i2c0: i2c@1a102200 {
+	i2c1: i2c@1a102200 {
 		compatible = "caninos,puppy-i2c";
 		#address-cells = <1>;
 		#size-cells = <0>;
 		reg = <0x1a102200 0x34>;
-		i2c-id = <0>;
-	};
-
-	i2c1: i2c@1a102280 {
-		compatible = "caninos,puppy-i2c";
-		#address-cells = <1>;
-		#size-cells = <0>;
-		reg = <0x1a102280 0x34>;
 		i2c-id = <1>;
 	};
 };
