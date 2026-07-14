@@ -268,7 +268,7 @@ static DEVICE_API(i2c, i2c_puppy_driver_api) = {
 	static struct i2c_puppy_data i2c_puppy_##idx##_data = {.clock_div = 0};                    \
                                                                                                    \
 	DEVICE_DT_INST_DEFINE(idx, i2c_puppy_init, NULL, &i2c_puppy_##idx##_data,                  \
-			      &i2c_puppy_##idx##_config, PRE_KERNEL_2, CONFIG_I2C_INIT_PRIORITY,   \
+			      &i2c_puppy_##idx##_config, POST_KERNEL, CONFIG_I2C_INIT_PRIORITY,   \
 			      &i2c_puppy_driver_api);
 
 DT_INST_FOREACH_STATUS_OKAY(PUPPY_I2C_INIT);

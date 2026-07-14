@@ -6,6 +6,7 @@
 
 #include "bmi323.h"
 #include "bmi323_spi.h"
+#include "bmi323_i2c.h"
 
 #include <zephyr/kernel.h>
 #include <zephyr/device.h>
@@ -25,37 +26,6 @@ LOG_MODULE_REGISTER(bosch_bmi323);
 #define IMU_BOSCH_DIE_TEMP_OFFSET_MICRO_DEG_CELSIUS (23000000LL)
 #define IMU_BOSCH_DIE_TEMP_MICRO_DEG_CELSIUS_LSB    (1953L)
 
-typedef void (*bosch_bmi323_gpio_callback_ptr)(const struct device *dev, struct gpio_callback *cb,
-					       uint32_t pins);
-
-struct bosch_bmi323_config {
-	const struct bosch_bmi323_bus *bus;
-	const struct gpio_dt_spec int_gpio;
-
-	const bosch_bmi323_gpio_callback_ptr int_gpio_callback;
-};
-
-struct bosch_bmi323_data {
-	struct k_mutex lock;
-
-	struct sensor_value acc_samples[3];
-	struct sensor_value gyro_samples[3];
-	struct sensor_value temperature;
-
-	bool acc_samples_valid;
-	bool gyro_samples_valid;
-	bool temperature_valid;
-
-	uint32_t acc_full_scale;
-	uint32_t gyro_full_scale;
-
-	struct gpio_callback gpio_callback;
-	const struct sensor_trigger *trigger;
-	sensor_trigger_handler_t trigger_handler;
-	struct k_work callback_work;
-	const struct device *dev;
-};
-
 static int bosch_bmi323_bus_init(const struct device *dev)
 {
 	const struct bosch_bmi323_config *config = (const struct bosch_bmi323_config *)dev->config;
@@ -65,7 +35,7 @@ static int bosch_bmi323_bus_init(const struct device *dev)
 	return bus->api->init(bus->context);
 }
 
-static int bosch_bmi323_bus_read_words(const struct device *dev, uint8_t offset, uint16_t *words,
+int bosch_bmi323_bus_read_words(const struct device *dev, uint8_t offset, uint16_t *words,
 				       uint16_t words_count)
 {
 	const struct bosch_bmi323_config *config = (const struct bosch_bmi323_config *)dev->config;
@@ -75,7 +45,7 @@ static int bosch_bmi323_bus_read_words(const struct device *dev, uint8_t offset,
 	return bus->api->read_words(bus->context, offset, words, words_count);
 }
 
-static int bosch_bmi323_bus_write_words(const struct device *dev, uint8_t offset, uint16_t *words,
+int bosch_bmi323_bus_write_words(const struct device *dev, uint8_t offset, uint16_t *words,
 					uint16_t words_count)
 {
 	const struct bosch_bmi323_config *config = (const struct bosch_bmi323_config *)dev->config;
@@ -793,93 +763,6 @@ static int bosch_bmi323_driver_api_attr_get(const struct device *dev, enum senso
 	return ret;
 }
 
-static int bosch_bmi323_driver_api_trigger_set_acc_drdy(const struct device *dev)
-{
-	uint16_t buf[2];
-
-	buf[0] = 0;
-	buf[1] = IMU_BOSCH_BMI323_REG_VALUE(INT_MAP2, ACC_DRDY_INT, INT1);
-
-	return bosch_bmi323_bus_write_words(dev, IMU_BOSCH_BMI323_REG_INT_MAP1, buf, 2);
-}
-
-static int bosch_bmi323_driver_api_trigger_set_acc_motion(const struct device *dev)
-{
-	uint16_t buf[2];
-	int ret;
-
-	buf[0] = IMU_BOSCH_BMI323_REG_VALUE(INT_MAP1, MOTION_OUT, INT1);
-	buf[1] = 0;
-
-	ret = bosch_bmi323_bus_write_words(dev, IMU_BOSCH_BMI323_REG_INT_MAP1, buf, 2);
-
-	if (ret < 0) {
-		return ret;
-	}
-
-	buf[0] = 0;
-
-	ret = bosch_bmi323_bus_write_words(dev, IMU_BOSCH_BMI323_REG_FEATURE_IO0, buf, 1);
-
-	if (ret < 0) {
-		return ret;
-	}
-
-	buf[0] = IMU_BOSCH_BMI323_REG_VALUE(FEATURE_IO0, MOTION_X_EN, EN) |
-		 IMU_BOSCH_BMI323_REG_VALUE(FEATURE_IO0, MOTION_Y_EN, EN) |
-		 IMU_BOSCH_BMI323_REG_VALUE(FEATURE_IO0, MOTION_Z_EN, EN);
-
-	ret = bosch_bmi323_bus_write_words(dev, IMU_BOSCH_BMI323_REG_FEATURE_IO0, buf, 1);
-
-	if (ret < 0) {
-		return ret;
-	}
-
-	buf[0] = 1;
-
-	return bosch_bmi323_bus_write_words(dev, IMU_BOSCH_BMI323_REG_FEATURE_IO_STATUS, buf, 1);
-}
-
-static int bosch_bmi323_driver_api_trigger_set(const struct device *dev,
-					       const struct sensor_trigger *trig,
-					       sensor_trigger_handler_t handler)
-{
-	struct bosch_bmi323_data *data = (struct bosch_bmi323_data *)dev->data;
-	int ret = -ENODEV;
-
-	k_mutex_lock(&data->lock, K_FOREVER);
-
-	data->trigger = trig;
-	data->trigger_handler = handler;
-
-	switch (trig->chan) {
-	case SENSOR_CHAN_ACCEL_XYZ:
-		switch (trig->type) {
-		case SENSOR_TRIG_DATA_READY:
-			ret = bosch_bmi323_driver_api_trigger_set_acc_drdy(dev);
-
-			break;
-
-		case SENSOR_TRIG_MOTION:
-			ret = bosch_bmi323_driver_api_trigger_set_acc_motion(dev);
-
-			break;
-
-		default:
-			break;
-		}
-
-		break;
-
-	default:
-		break;
-	}
-
-	k_mutex_unlock(&data->lock);
-
-	return ret;
-}
-
 static int bosch_bmi323_driver_api_fetch_acc_samples(const struct device *dev)
 {
 	struct bosch_bmi323_data *data = (struct bosch_bmi323_data *)dev->data;
@@ -1100,66 +983,12 @@ static int bosch_bmi323_driver_api_channel_get(const struct device *dev, enum se
 static DEVICE_API(sensor, bosch_bmi323_api) = {
 	.attr_set = bosch_bmi323_driver_api_attr_set,
 	.attr_get = bosch_bmi323_driver_api_attr_get,
+#ifdef CONFIG_BMI323_TRIGGER
 	.trigger_set = bosch_bmi323_driver_api_trigger_set,
+#endif
 	.sample_fetch = bosch_bmi323_driver_api_sample_fetch,
 	.channel_get = bosch_bmi323_driver_api_channel_get,
 };
-
-static void bosch_bmi323_irq_callback(const struct device *dev)
-{
-	struct bosch_bmi323_data *data = (struct bosch_bmi323_data *)dev->data;
-
-	k_work_submit(&data->callback_work);
-}
-
-static int bosch_bmi323_init_irq(const struct device *dev)
-{
-	struct bosch_bmi323_data *data = (struct bosch_bmi323_data *)dev->data;
-	struct bosch_bmi323_config *config = (struct bosch_bmi323_config *)dev->config;
-	int ret;
-
-	ret = gpio_pin_configure_dt(&config->int_gpio, GPIO_INPUT);
-
-	if (ret < 0) {
-		return ret;
-	}
-
-	gpio_init_callback(&data->gpio_callback, config->int_gpio_callback,
-			   BIT(config->int_gpio.pin));
-
-	ret = gpio_add_callback(config->int_gpio.port, &data->gpio_callback);
-
-	if (ret < 0) {
-		return ret;
-	}
-
-	return gpio_pin_interrupt_configure_dt(&config->int_gpio, GPIO_INT_DISABLE);
-}
-
-static int bosch_bmi323_init_int1(const struct device *dev)
-{
-	uint16_t buf;
-
-	buf = IMU_BOSCH_BMI323_REG_VALUE(IO_INT_CTRL, INT1_LVL, ACT_HIGH) |
-	      IMU_BOSCH_BMI323_REG_VALUE(IO_INT_CTRL, INT1_OD, PUSH_PULL) |
-	      IMU_BOSCH_BMI323_REG_VALUE(IO_INT_CTRL, INT1_OUTPUT_EN, EN);
-
-	return bosch_bmi323_bus_write_words(dev, IMU_BOSCH_BMI323_REG_IO_INT_CTRL, &buf, 1);
-}
-
-static void bosch_bmi323_irq_callback_handler(struct k_work *item)
-{
-	struct bosch_bmi323_data *data =
-		CONTAINER_OF(item, struct bosch_bmi323_data, callback_work);
-
-	k_mutex_lock(&data->lock, K_FOREVER);
-
-	if (data->trigger_handler != NULL) {
-		data->trigger_handler(data->dev, data->trigger);
-	}
-
-	k_mutex_unlock(&data->lock);
-}
 
 static int bosch_bmi323_pm_resume(const struct device *dev)
 {
@@ -1206,6 +1035,7 @@ static int bosch_bmi323_pm_resume(const struct device *dev)
 		return ret;
 	}
 
+#ifdef CONFIG_BMI323_TRIGGER
 	ret = bosch_bmi323_init_int1(dev);
 
 	if (ret < 0) {
@@ -1217,6 +1047,7 @@ static int bosch_bmi323_pm_resume(const struct device *dev)
 	if (ret < 0) {
 		LOG_WRN("Failed to configure int");
 	}
+#endif
 
 	return ret;
 }
@@ -1227,10 +1058,12 @@ static int bosch_bmi323_pm_suspend(const struct device *dev)
 	const struct bosch_bmi323_config *config = (const struct bosch_bmi323_config *)dev->config;
 	int ret;
 
+#ifdef CONFIG_BMI323_TRIGGER
 	ret = gpio_pin_interrupt_configure_dt(&config->int_gpio, GPIO_INT_DISABLE);
 	if (ret < 0) {
 		LOG_WRN("Failed to disable int");
 	}
+#endif
 
 	/* Soft reset device to put it into suspend */
 	return bosch_bmi323_soft_reset(dev);
@@ -1275,17 +1108,15 @@ static int bosch_bmi323_init(const struct device *dev)
 
 	k_mutex_init(&data->lock);
 
-	k_work_init(&data->callback_work, bosch_bmi323_irq_callback_handler);
-
-	data->dev = dev;
-
-	ret = bosch_bmi323_init_irq(dev);
+#ifdef CONFIG_BMI323_TRIGGER
+	ret = bosch_bmi323_trigger_init(dev);
 
 	if (ret < 0) {
 		LOG_WRN("Failed to init irq");
 
 		return ret;
 	}
+#endif
 
 #ifndef CONFIG_PM_DEVICE_RUNTIME
 	ret = bosch_bmi323_pm_resume(dev);
@@ -1310,31 +1141,26 @@ static int bosch_bmi323_init(const struct device *dev)
  * Currently only support for the SPI bus is implemented. This shall be updated to
  * select the appropriate bus once I2C is implemented.
  */
-#define BMI323_DEVICE_BUS(inst)                                                                    \
-	BUILD_ASSERT(DT_INST_ON_BUS(inst, spi), "Unimplemented bus");                              \
-	BMI323_DEVICE_SPI_BUS(inst)
+#define BMI323_DEVICE_BUS(inst)  				                                   \
+    BUILD_ASSERT(DT_INST_ON_BUS(inst, spi) || DT_INST_ON_BUS(inst, i2c), "Unimplemented bus");     \
+      COND_CODE_1(DT_INST_ON_BUS(inst, i2c),(BMI323_DEVICE_I2C_BUS(inst)),(BMI323_DEVICE_SPI_BUS(inst)))
+
 
 #define BMI323_DEVICE(inst)                                                                        \
 	static struct bosch_bmi323_data bosch_bmi323_data_##inst;                                  \
                                                                                                    \
 	BMI323_DEVICE_BUS(inst);                                                                   \
                                                                                                    \
-	static void bosch_bmi323_irq_callback##inst(const struct device *dev,                      \
-						    struct gpio_callback *cb, uint32_t pins)       \
-	{                                                                                          \
-		bosch_bmi323_irq_callback(DEVICE_DT_INST_GET(inst));                               \
-	}                                                                                          \
-                                                                                                   \
 	static const struct bosch_bmi323_config bosch_bmi323_config_##inst = {                     \
 		.bus = &bosch_bmi323_bus_api##inst,                                                \
-		.int_gpio = GPIO_DT_SPEC_INST_GET(inst, int_gpios),                                \
-		.int_gpio_callback = bosch_bmi323_irq_callback##inst,                              \
+		IF_ENABLED(CONFIG_BMI323_TRIGGER,                                            \
+			   (.int_gpio = GPIO_DT_SPEC_INST_GET(inst, int_gpios),))                  \
 	};                                                                                         \
                                                                                                    \
 	PM_DEVICE_DT_INST_DEFINE(inst, bosch_bmi323_pm_action);                                    \
                                                                                                    \
 	SENSOR_DEVICE_DT_INST_DEFINE(inst, bosch_bmi323_init, PM_DEVICE_DT_INST_GET(inst),         \
 				     &bosch_bmi323_data_##inst, &bosch_bmi323_config_##inst,       \
-				     POST_KERNEL, 99, &bosch_bmi323_api);
+				     POST_KERNEL, CONFIG_SENSOR_INIT_PRIORITY, &bosch_bmi323_api);
 
 DT_INST_FOREACH_STATUS_OKAY(BMI323_DEVICE)

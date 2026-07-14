@@ -9,6 +9,8 @@
 
 #include <zephyr/sys/util.h>
 #include <zephyr/types.h>
+#include <zephyr/drivers/sensor.h>
+#include <zephyr/drivers/gpio.h>
 
 #define IMU_BOSCH_BMI323_REG_ACC_DATA_X (0x03)
 #define IMU_BOSCH_BMI323_REG_ACC_DATA_Y (0x04)
@@ -151,6 +153,12 @@
 #define IMU_BOSCH_BMI323_REG_INT_MAP2_ACC_DRDY_INT_VAL_INT1 (0x01)
 #define IMU_BOSCH_BMI323_REG_INT_MAP2_ACC_DRDY_INT_VAL_INT2 (0x02)
 
+#define IMU_BOSCH_BMI323_REG_INT_MAP2_ACC_FIFO_FULL_INT_OFFSET   (0xFE)
+#define IMU_BOSCH_BMI323_REG_INT_MAP2_ACC_FIFO_FULL_INT_SIZE	 (0x02)
+#define IMU_BOSCH_BMI323_REG_INT_MAP2_ACC_FIFO_FULL_INT_VAL_DIS  (0x00)
+#define IMU_BOSCH_BMI323_REG_INT_MAP2_ACC_FIFO_FULL_INT_VAL_INT1 (0x01)
+#define IMU_BOSCH_BMI323_REG_INT_MAP2_ACC_FIFO_FULL_INT_VAL_INT2 (0x02)
+
 #define IMU_BOSCH_BMI323_REG_FEATURE_CTRL (0x40)
 
 #define IMU_BOSCH_BMI323_REG_FEATURE_CTRL_ENABLE_OFFSET	 (0x00)
@@ -192,5 +200,52 @@ struct bosch_bmi323_bus {
 	const void *context;
 	const struct bosch_bmi323_bus_api *api;
 };
+struct bosch_bmi323_config {
+	const struct bosch_bmi323_bus *bus;
+
+#ifdef CONFIG_BMI323_TRIGGER
+	const struct gpio_dt_spec int_gpio;
+#endif
+};
+
+struct bosch_bmi323_data {
+	struct k_mutex lock;
+
+	struct sensor_value acc_samples[3];
+	struct sensor_value gyro_samples[3];
+	struct sensor_value temperature;
+
+	bool acc_samples_valid;
+	bool gyro_samples_valid;
+	bool temperature_valid;
+
+	uint32_t acc_full_scale;
+	uint32_t gyro_full_scale;
+
+#ifdef CONFIG_BMI323_TRIGGER
+	/* Trigger uses global thread*/
+	struct gpio_callback gpio_callback;
+	struct k_work callback_work;
+	const struct device *dev;
+
+	const struct sensor_trigger *trigger;
+	sensor_trigger_handler_t trigger_handler;
+#endif
+};
+
+int bosch_bmi323_bus_write_words(const struct device *dev, uint8_t offset, uint16_t *words,
+					uint16_t words_count);
+
+int bosch_bmi323_bus_read_words(const struct device *dev, uint8_t offset, uint16_t *words,
+				       uint16_t words_count);
+					   
+					 
+int bosch_bmi323_trigger_init(const struct device *dev);
+
+int bosch_bmi323_init_int1(const struct device *dev);
+
+int bosch_bmi323_driver_api_trigger_set(const struct device *dev,
+					       const struct sensor_trigger *trig,
+					       sensor_trigger_handler_t handler);
 
 #endif /* ZEPHYR_DRIVERS_SENSOR_BMI323_BMI323_H_ */
