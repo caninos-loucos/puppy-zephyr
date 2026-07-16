@@ -1,5 +1,5 @@
 /**
- * @file SoC configuration macros for the pulpino core
+ * @file SoC configuration macros for puppy core
  */
 
 #ifndef __PUPPY_SOC_H_
@@ -22,27 +22,19 @@
 
 #define PULP_APB_TIMER_BASE_ADDR (0x1A10B000)
 
+#define PULP_REG(x) (*((volatile uint32_t *)(x)))
+
+/* APB CTRL registers */
+#include "soc_apb_ctrl.h"
+
 /* PAD configuration */
 #include "soc_pad.h"
-
-/* PAD MUX register */
-#define PULP_PADMUX(group) PULP_REG(PULP_PAD_BASE + group * 0x4)
-
-#define PULP_PAD_SPI  0
-#define PULP_PAD_GPIO 1
-#define PULP_PAD_MASK 1
-
-/* PAD CFG register address */
-#define PULP_PADCFG_REG(pad) PULP_REG(PULP_PAD_CFG_BASE + (pad / 4) * 0x4)
 
 /* uDMA configuration */
 #include "soc_udma.h"
 
 /* Fabric Controller Event Configuration */
 #include "soc_event.h"
-
-/* Register Access MACRO */
-#define PULP_REG(x) (*((volatile uint32_t *)(x)))
 
 /* Interrupt Registers */
 #define PULP_IRQ_BASE_ADDR         (0x1A109000)
@@ -62,14 +54,14 @@
 
 #include <zephyr/irq.h>
 
-#define PULP_IRQ_MASK PULP_REG(PULP_IRQ_MSK_GET_REG)
-#define PULP_IRQ_MASK_SET                                                                          \
-	PULP_REG(PULP_IRQ_MSK_SET_REG) /* This register sets bits on MASK register */
-#define PULP_IRQ_MASK_CLR                                                                          \
-	PULP_REG(PULP_IRQ_MSK_CLR_REG) /* This register clears bits on MASK register */
-#define PULP_IRQ_ACK     PULP_REG(PULP_IRQ_ACK_GET_REG)
-#define PULP_IRQ_ACK_SET PULP_REG(PULP_IRQ_ACK_SET_REG)
-#define PULP_IRQ_ACK_CLR PULP_REG(PULP_IRQ_ACK_CLR_REG)
+#define PULP_IRQ_MASK     PULP_REG(PULP_IRQ_MSK_GET_REG)
+/* This register sets bits on MASK register */
+#define PULP_IRQ_MASK_SET PULP_REG(PULP_IRQ_MSK_SET_REG)
+/* This register clears bits on MASK register */
+#define PULP_IRQ_MASK_CLR PULP_REG(PULP_IRQ_MSK_CLR_REG)
+#define PULP_IRQ_ACK      PULP_REG(PULP_IRQ_ACK_GET_REG)
+#define PULP_IRQ_ACK_SET  PULP_REG(PULP_IRQ_ACK_SET_REG)
+#define PULP_IRQ_ACK_CLR  PULP_REG(PULP_IRQ_ACK_CLR_REG)
 
 #if defined(CONFIG_RISCV_SOC_INTERRUPT_INIT)
 void soc_interrupt_init(void);

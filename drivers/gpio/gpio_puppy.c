@@ -1,316 +1,228 @@
+/*
+ * Copyright (c) 2026 Ana Clara Forcelli - LSITEC
+ * Copyright (c) 2026 Edgar Bernardi Righi - LSITEC
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #define DT_DRV_COMPAT caninos_puppy_gpio
 
-#include <errno.h>
-#include <soc.h>
-#include <zephyr/arch/common/sys_bitops.h>
+#define LOG_LEVEL CONFIG_GPIO_LOG_LEVEL
+#include <zephyr/logging/log.h>
+LOG_MODULE_REGISTER(gpio_puppy);
+
 #include <zephyr/drivers/gpio.h>
-#include "zephyr/drivers/gpio/gpio_utils.h"
-#include "gpio_puppy.h"
+#include <zephyr/drivers/gpio/gpio_utils.h>
+#include <soc.h>
 
 struct gpio_puppy_config {
-	uint32_t base;
+    struct gpio_driver_config common; /* this MUST be first */
+    uint32_t base;
 };
 
 struct gpio_puppy_data {
-	sys_slist_t callbacks;
+    struct gpio_driver_data common; /* this MUST be first */
+    sys_slist_t callbacks;          /* list of callbacks */
 };
 
-/**
- * @brief Configure pin
- *
- * @param dev Device structure
- * @param pin The pin number
- * @param flags Flags of pin or port
- *
- * @return 0 if successful, failed otherwise
- */
-static int gpio_puppy_configure(const struct device *dev, gpio_pin_t pin, gpio_flags_t flags)
+struct gpio_puppy {
+    uint32_t PADDIR;        // BASEADDR + 0x00
+    uint32_t GPIOEN;        // BASEADDR + 0x04
+    uint32_t PADIN;         // BASEADDR + 0x08
+    uint32_t PADOUT;        // BASEADDR + 0x0c
+    uint32_t PADOUTSET;     // BASEADDR + 0x10
+    uint32_t PADOUTCLR;     // BASEADDR + 0x14
+    uint32_t INTEN;         // BASEADDR + 0x18
+    uint32_t INTTYPE_00_15; // BASEADDR + 0x1c
+    uint32_t INTTYPE_16_31; // BASEADDR + 0x20
+    uint32_t INTSTATUS;     // BASEADDR + 0x24
+    uint32_t PADCFG_00_07;  // BASEADDR + 0x28
+    uint32_t PADCFG_08_15;  // BASEADDR + 0x2c
+    uint32_t PADCFG_16_23;  // BASEADDR + 0x30
+    uint32_t PADCFG_24_31;  // BASEADDR + 0x34
+} __packed;
+
+static inline volatile struct gpio_puppy* GET_GPIO(const struct device *dev)
 {
-	const struct gpio_puppy_config *config = dev->config;
-
-	int pad_bit;
-	int group;
-
-	if (pin > 31) {
-		return -EINVAL;
-	}
-
-	group = pin / 16;
-	pad_bit = (pin % 16) * 2;
-
-	/* Configure pin as gpio */
-	/* GPIO pin cannot be input and output simultaneously */
-	if ((flags & GPIO_INPUT) && (flags & GPIO_OUTPUT)) {
-		PULP_PADMUX(group) &= ~(PULP_PAD_GPIO << pad_bit);
-		sys_write32(sys_read32(config->base + GPIO_REG_GPIOEN) & ~BIT(pin),
-			    config->base + GPIO_REG_GPIOEN);
-	} else if ((flags & GPIO_INPUT) || (flags & GPIO_OUTPUT)) {
-		PULP_PADMUX(group) |= (PULP_PAD_GPIO << pad_bit);
-		sys_write32(sys_read32(config->base + GPIO_REG_GPIOEN) | BIT(pin),
-			    config->base + GPIO_REG_GPIOEN);
-	}
-
-	/* Configure gpio direction */
-	if (flags & GPIO_INPUT) {
-
-		sys_write32(sys_read32(config->base + GPIO_REG_PADDIR) & ~BIT(pin),
-			    config->base + GPIO_REG_PADDIR);
-	}
-
-	else if (flags & GPIO_OUTPUT) {
-		sys_write32(sys_read32(config->base + GPIO_REG_PADDIR) | BIT(pin),
-			    config->base + GPIO_REG_PADDIR);
-
-		if (flags & GPIO_OUTPUT_INIT_HIGH) {
-			sys_write32(config->base + GPIO_REG_PADOUTSET, BIT(pin));
-		} else {
-			sys_write32(config->base + GPIO_REG_PADOUTCLR, BIT(pin));
-		}
-	}
-
-	/*
-	 * Configure interrupt if GPIO_INT is set.
-	 * Here, we just configure the gpio interrupt behavior,
-	 * we do not enable/disable interrupt for a particular
-	 * gpio.
-	 * Interrupt for a gpio is:
-	 * 1) enabled only via a call to gpio_puppy_enable_callback.
-	 * 2) disabled only via a call to gpio_puppy_disabled_callback.
-	 */
-	if (!(flags & GPIO_INT_ENABLE)) {
-		return 0;
-	}
-
-	/* Edge or Level triggered ? */
-	if (!(flags & GPIO_INT_EDGE)) {
-		return -ENOTSUP;
-	}
-
-	return 0;
+    const struct gpio_puppy_config *config = dev->config;
+    return (volatile struct gpio_puppy *)(config->base);
 }
 
-/**
- * @brief Read GPIO port
- *
- * @param dev Device struct
- * @param value Value to set (0 or 1)
- *
- * @return 0 if successful, failed otherwise
- */
-static int gpio_puppy_port_get_raw(const struct device *dev, gpio_port_value_t *value)
+static int gpio_puppy_configure(const struct device *dev,
+                                gpio_pin_t pin, gpio_flags_t flags)
 {
-	const struct gpio_puppy_config *config = dev->config;
+    volatile struct gpio_puppy *gpio = GET_GPIO(dev);
 
-	*value = sys_read32(config->base + GPIO_REG_PADIN);
+    /* Check input parameters: pin number */
+    if (pin > 31) {
+        return -ENOTSUP;
+    }
+    /* Check input parameters: simultaneous in/out mode */
+    if ((flags & GPIO_OUTPUT) && (flags & GPIO_INPUT)) {
+        return -ENOTSUP;
+    }
 
-	return 0;
+    /* Configure pin as gpio */
+    config_pad_func(pin, 0x1); /* gpio is always function 0x1 */
+
+    /* Enable the gpio's clock */
+    gpio->GPIOEN |= BIT(pin);
+
+    if (flags & GPIO_OUTPUT)
+    {
+        if (flags & GPIO_OUTPUT_INIT_HIGH) {
+            gpio->PADOUTSET = BIT(pin);
+        }
+        else {
+            gpio->PADOUTCLR = BIT(pin);
+        }
+        gpio->PADDIR |= BIT(pin);
+    }
+    else {
+        gpio->PADDIR &= ~BIT(pin);
+    }
+    return 0;
 }
 
-/**
- * @brief Set port according to mask and value
- *
- * @param dev Device struct
- * @param mask The mask for GPIO port
- * @param value Value of input pin(s)
- *
- * @return 0 if successful, failed otherwise
- */
-static int gpio_puppy_port_set_masked_raw(const struct device *dev, gpio_port_pins_t mask,
-					  gpio_port_value_t value)
+static int gpio_puppy_port_get_raw(const struct device *dev,
+                                   gpio_port_value_t *value)
 {
-	const struct gpio_puppy_config *config = dev->config;
-
-	if (mask & value) {
-		sys_write32(mask & value, config->base + GPIO_REG_PADOUTSET);
-	}
-	if (mask & ~value) {
-		sys_write32(mask & ~value, config->base + GPIO_REG_PADOUTCLR);
-	}
-
-	return 0;
+    *value = GET_GPIO(dev)->PADIN;
+    return 0;
 }
 
-/**
- * @brief Set bits according to mask
- *
- * @param dev Device struct
- * @param mask The mask for GPIO port
- *
- * @return 0 if successful, failed otherwise
- */
-static int gpio_puppy_port_set_bits_raw(const struct device *dev, gpio_port_pins_t mask)
+static int gpio_puppy_port_set_masked_raw(const struct device *dev,
+                                          gpio_port_pins_t mask,
+                                          gpio_port_value_t value)
 {
-	const struct gpio_puppy_config *config = dev->config;
-
-	sys_write32(mask, config->base + GPIO_REG_PADOUTSET);
-
-	return 0;
+    GET_GPIO(dev)->PADOUT ^= (GET_GPIO(dev)->PADOUT & ~mask) | (value & mask);
+    return 0;
 }
 
-/**
- * @brief Clear bits according to mask
- *
- * @param dev Device struct
- * @param mask The mask for GPIO port
- *
- * @return 0 if successful, failed otherwise
- */
-static int gpio_puppy_port_clear_bits_raw(const struct device *dev, gpio_port_pins_t mask)
+static int gpio_puppy_port_set_bits_raw(const struct device *dev,
+                                        gpio_port_pins_t mask)
 {
-	const struct gpio_puppy_config *config = dev->config;
-
-	sys_write32(mask, config->base + GPIO_REG_PADOUTCLR);
-
-	return 0;
+    GET_GPIO(dev)->PADOUTSET = mask;
+    return 0;
 }
 
-/**
- * @brief Toggle bits according to mask
- *
- * @param dev Device struct
- * @param mask The mask for GPIO port
- *
- * @return 0 if successful, failed otherwise
- */
-static int gpio_puppy_port_toggle_bits(const struct device *dev, gpio_port_pins_t mask)
+static int gpio_puppy_port_clear_bits_raw(const struct device *dev,
+                                          gpio_port_pins_t mask)
 {
-	const struct gpio_puppy_config *config = dev->config;
-
-	uint32_t value = sys_read32(config->base + GPIO_REG_PADOUT);
-
-	return gpio_puppy_port_set_masked_raw(dev, mask, ~value);
-
-	return 0;
+    GET_GPIO(dev)->PADOUTCLR = mask;
+    return 0;
 }
 
-/**
- * @brief Configure pin interrupt settings
- *
- * @param dev Device struct
- * @param pin GPIO pin
- * @param flags GPIO Interrupt flags
- *
- * @return 0 if successful, failed otherwise
- */
-static int gpio_puppy_pin_interrupt_configure(const struct device *dev, gpio_pin_t pin,
-					      enum gpio_int_mode mode, enum gpio_int_trig trig)
+static int gpio_puppy_port_toggle_bits(const struct device *dev,
+                                       gpio_port_pins_t mask)
 {
-	const struct gpio_puppy_config *config = dev->config;
-	uint32_t inttype = 0;
-
-	if (mode == GPIO_INT_MODE_DISABLED) {
-		sys_write32(sys_read32(config->base + GPIO_REG_INTEN) & ~BIT(pin),
-			    config->base + GPIO_REG_INTEN);
-		return 0;
-	}
-
-	if (mode == GPIO_INT_MODE_LEVEL) {
-		return -ENOTSUP;
-	}
-
-	switch (trig) {
-	case GPIO_INT_TRIG_LOW:
-		inttype = 0;
-		break;
-	case GPIO_INT_TRIG_HIGH:
-		inttype = 1;
-		break;
-	case GPIO_INT_TRIG_BOTH:
-		inttype = 2;
-		break;
-	default:
-		return -EINVAL;
-	}
-
-	if (pin < 16) {
-		sys_write32(sys_read32(config->base + GPIO_REG_INTTYPE_00_15) & ~(0x3 << (pin * 2)),
-			    config->base + GPIO_REG_INTTYPE_00_15);
-		sys_write32(sys_read32(config->base + GPIO_REG_INTTYPE_00_15) |
-				    (inttype << (pin * 2)),
-			    config->base + GPIO_REG_INTTYPE_00_15);
-	} else {
-		sys_write32(sys_read32(config->base + GPIO_REG_INTTYPE_16_31) & ~(0x3 << (pin * 2)),
-			    config->base + GPIO_REG_INTTYPE_16_31);
-		sys_write32(sys_read32(config->base + GPIO_REG_INTTYPE_16_31) |
-				    (inttype << (pin * 2)),
-			    config->base + GPIO_REG_INTTYPE_16_31);
-	}
-
-	sys_write32(sys_read32(config->base + GPIO_REG_INTEN) | BIT(pin),
-		    config->base + GPIO_REG_INTEN);
-
-	return 0;
+    GET_GPIO(dev)->PADOUT ^= mask;
+    return 0;
 }
 
-/**
- * @brief Configure callbacks
- *
- * @param dev Device struct
- * @param callback callback handle
- * @param set
- *
- * @return 0 if successful, failed otherwise
- */
-static int gpio_puppy_manage_callback(const struct device *dev, struct gpio_callback *callback,
-				      bool set)
+static int gpio_puppy_pin_irq_set(const struct device *dev,
+                                  gpio_pin_t pin, enum gpio_int_trig trig)
 {
-	struct gpio_puppy_data *data = dev->data;
+    volatile struct gpio_puppy *gpio = GET_GPIO(dev);
+    uint32_t bit = 2 * (pin % 16); 
+    uint32_t inttype = 0UL;
 
-	gpio_manage_callback(&data->callbacks, callback, set);
+    switch (trig) {
+    case GPIO_INT_TRIG_LOW:
+        inttype = 0UL;
+        break;
+    case GPIO_INT_TRIG_HIGH:
+        inttype = 1UL;
+        break;
+    case GPIO_INT_TRIG_BOTH:
+        inttype = 2UL;
+        break;
+    default:
+        return -ENOTSUP;
+    }
+    
+    gpio->INTEN &= ~BIT(pin);
 
-	return 0;
+    if (pin < 16) {
+        gpio->INTTYPE_00_15 &= ~(0x3 << bit);
+        gpio->INTTYPE_00_15 |= (inttype << bit);
+    }
+    else {
+        gpio->INTTYPE_16_31 &= ~(0x3 << bit);
+        gpio->INTTYPE_16_31 |= (inttype << bit);
+    }
+
+    gpio->INTEN |= BIT(pin);
+    return 0;
 }
 
-/**
- * @brief Handles GPIO ISR
- *
- * Perform basic initialization of a GPIO controller
- *
- * @param dev GPIO device structs
- *
- * @return 0
- */
+static int gpio_puppy_pin_interrupt_configure(const struct device *dev,
+                                              gpio_pin_t pin,
+                                              enum gpio_int_mode mode,
+                                              enum gpio_int_trig trig)
+{
+    switch (mode) {
+    case GPIO_INT_MODE_DISABLED:
+        GET_GPIO(dev)->INTEN &= ~BIT(pin);
+        return 0;
+    case GPIO_INT_MODE_EDGE:
+        return gpio_puppy_pin_irq_set(dev, pin, trig);
+    default:
+        return -ENOTSUP;
+    }
+}
+
+static int gpio_puppy_manage_callback(const struct device *dev,
+                                      struct gpio_callback *callback,
+                                      bool set)
+{
+    struct gpio_puppy_data *data = dev->data;
+    return gpio_manage_callback(&data->callbacks, callback, set);
+}
+
 static void gpio_puppy_isr(const struct device *dev)
 {
-	const struct gpio_puppy_config *config = dev->config;
-	struct gpio_puppy_data *data = dev->data;
+    struct gpio_puppy_data *data = dev->data;
 
-	/* Interrupts cleared automatically when intstatus register is read */
-	uint32_t int_status = sys_read32(config->base + GPIO_REG_INTSTATUS);
+    /* Interrupts cleared automatically when intstatus register is read */
+    uint32_t status = GET_GPIO(dev)->INTSTATUS;
 
-	gpio_fire_callbacks(&data->callbacks, dev, int_status);
+    gpio_fire_callbacks(&data->callbacks, dev, status);
 }
 
 static DEVICE_API(gpio, gpio_puppy_driver_api) = {
-	.pin_configure = gpio_puppy_configure,
-	.port_get_raw = gpio_puppy_port_get_raw,
-	.port_set_masked_raw = gpio_puppy_port_set_masked_raw,
-	.port_set_bits_raw = gpio_puppy_port_set_bits_raw,
-	.port_clear_bits_raw = gpio_puppy_port_clear_bits_raw,
-	.port_toggle_bits = gpio_puppy_port_toggle_bits,
-	.pin_interrupt_configure = gpio_puppy_pin_interrupt_configure,
-	.manage_callback = gpio_puppy_manage_callback,
+    .pin_configure = gpio_puppy_configure,
+    .port_get_raw = gpio_puppy_port_get_raw,
+    .port_set_masked_raw = gpio_puppy_port_set_masked_raw,
+    .port_set_bits_raw = gpio_puppy_port_set_bits_raw,
+    .port_clear_bits_raw = gpio_puppy_port_clear_bits_raw,
+    .port_toggle_bits = gpio_puppy_port_toggle_bits,
+    .pin_interrupt_configure = gpio_puppy_pin_interrupt_configure,
+    .manage_callback = gpio_puppy_manage_callback,
 };
 
-#define GPIO_PUPPY_INIT(idx)                                                                       \
-	static const struct gpio_puppy_config gpio_puppy_##idx##_config = {                        \
-		.base = DT_INST_REG_ADDR(idx),                                                     \
-	};                                                                                         \
-                                                                                                   \
-	static struct gpio_puppy_data gpio_puppy_##idx##_data = {                                  \
-		.callbacks = NULL,                                                                 \
-	};                                                                                         \
-                                                                                                   \
-	static int gpio_puppy_##idx##_init(const struct device *dev)                               \
-	{                                                                                          \
-		IRQ_CONNECT(DT_INST_IRQN(idx), 0, gpio_puppy_isr, DEVICE_DT_INST_GET(idx), 0);     \
-                                                                                                   \
-		irq_enable(DT_INST_IRQN(idx));                                                     \
-		return 0;                                                                          \
-	}                                                                                          \
-                                                                                                   \
-	DEVICE_DT_INST_DEFINE(idx, gpio_puppy_##idx##_init, NULL, &gpio_puppy_##idx##_data,        \
-			      &gpio_puppy_##idx##_config, PRE_KERNEL_1, CONFIG_GPIO_INIT_PRIORITY, \
-			      &gpio_puppy_driver_api);
+/* GPIO driver registration */
+#define GPIO_PUPPY_INIT(idx)                                             \
+    static const struct gpio_puppy_config gpio_puppy_##idx##_config = {  \
+        .common = {                                                      \
+            .port_pin_mask = GPIO_PORT_PIN_MASK_FROM_NGPIOS(32U),        \
+        },                                                               \
+        .base = DT_INST_REG_ADDR(idx),                                   \
+    };                                                                   \
+    static struct gpio_puppy_data gpio_puppy_##idx##_data;               \
+                                                                         \
+    static int gpio_puppy_##idx##_init(const struct device *dev) {       \
+        IRQ_CONNECT(DT_INST_IRQN(idx), 0,                                \
+                    gpio_puppy_isr, DEVICE_DT_INST_GET(idx), 0);         \
+        irq_enable(DT_INST_IRQN(idx));                                   \
+        return 0;                                                        \
+    }                                                                    \
+    DEVICE_DT_INST_DEFINE(idx, gpio_puppy_##idx##_init,                  \
+                          NULL,                                          \
+                          &gpio_puppy_##idx##_data,                      \
+                          &gpio_puppy_##idx##_config,                    \
+                          PRE_KERNEL_1,                                  \
+                          CONFIG_GPIO_INIT_PRIORITY,                     \
+                          &gpio_puppy_driver_api);
 
 DT_INST_FOREACH_STATUS_OKAY(GPIO_PUPPY_INIT)
