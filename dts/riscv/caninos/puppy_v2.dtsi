@@ -40,6 +40,8 @@
         #size-cells = <0>;
         reg = <0x1a102200 0x34>;
         i2c-id = <0>;
+        sda-pin = <26>;
+        scl-pin = <27>;
     };
 
     i2c1: i2c@1a102280 {
@@ -48,5 +50,7 @@
         #size-cells = <0>;
         reg = <0x1a102280 0x34>;
         i2c-id = <1>;
+        sda-pin = <9>;
+        scl-pin = <10>;
     };
 };
