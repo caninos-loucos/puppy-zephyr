@@ -271,8 +271,9 @@ static DEVICE_API(i2c, i2c_puppy_driver_api) = {
 		.id = DT_INST_PROP(idx, i2c_id),                                                   \
 		.base = DT_INST_REG_ADDR(idx),                                                     \
 		.bus_freq = DT_INST_ENUM_IDX_OR(idx, clock_frequency, 100000U),                    \
-		.sda_pin = DT_INST_ENUM_IDX(idx, sda_pin),                                  \
-		.scl_pin = DT_INST_ENUM_IDX(idx, scl_pin)};                                 \
+		.sda_pin = DT_INST_PROP(idx, sda_pin),                                  \
+		.scl_pin = DT_INST_PROP(idx, scl_pin), \
+		};                                 \
                                                                                                    \
 	static struct i2c_puppy_data i2c_puppy_##idx##_data = {.clock_div = 0};                    \
                                                                                                    \
