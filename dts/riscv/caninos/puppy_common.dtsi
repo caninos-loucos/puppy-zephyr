@@ -1,0 +1,84 @@
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ */
+/dts-v1/;
+#include <mem.h>
+#include <zephyr/dt-bindings/gpio/gpio.h>
+
+/ {
+    #address-cells = <1>;
+    #size-cells = <1>;
+    compatible = "caninos,puppy";
+
+    cpus {
+        #address-cells = <1>;
+        #size-cells = <0>;
+
+        cpu0: cpu@0 {
+            device_type = "cpu";
+            compatible = "riscv";
+            riscv,isa = "rv32imfc_zicsr";
+            reg = <0>;
+        };
+    };
+
+    soc: soc {
+        #address-cells = <1>;
+        #size-cells = <1>;
+        compatible = "simple-bus";
+        ranges;
+
+        bootram: bootram@1c000000 {
+            device_type = "memory";
+            reg = <0x1c000000 DT_SIZE_K(64)>;
+        };
+
+        sram: sram@1c010000 {
+            device_type = "memory";
+            reg = <0x1c010000 DT_SIZE_K(256)>;
+        };
+
+        gpio0: gpio@1a101000 {
+            compatible = "caninos,puppy-gpio";
+            gpio-controller;
+            #gpio-cells = <2>;
+            reg = <0x1a101000 0x38>;
+            ngpios = <32>;
+            //gpio-reserved-ranges = <>;
+            status = "okay";
+        };
+
+        gpio1: gpio@1a101038 {
+            compatible = "caninos,puppy-gpio";
+            gpio-controller;
+            #gpio-cells = <2>;
+            reg = <0x1a101038 0x38>;
+            ngpios = <32>;
+            //gpio-reserved-ranges = <>;
+            status = "okay";
+        };
+
+		/* PWM0 is not externalized on chip */
+
+		pwm1: pwm1@1a105040 {
+			compatible = "caninos,puppy-pwm";
+			reg = <0x1a105040 0x40>;
+			pwm-id = <1>;
+			#pwm-cells = <3>;
+		};
+
+		pwm2: pwm2@1a105080 {
+			compatible = "caninos,puppy-pwm";
+			reg = <0x1a105080 0x40>;
+			pwm-id = <2>;
+			#pwm-cells = <3>;
+		};
+
+		pwm3: pwm3@1a1050c0 {
+			compatible = "caninos,puppy-pwm";
+			reg = <0x1a1050c0 0x40>;
+			pwm-id = <3>;
+			#pwm-cells = <3>;
+		};
+	};
+};

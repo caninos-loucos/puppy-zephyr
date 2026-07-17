@@ -23,7 +23,7 @@ void eot_event(unsigned int event_num, void *dev_ptr)
 {
 	const struct device *dev = (struct device *)dev_ptr;
 	const struct i2c_puppy_config *config = dev->config;
-	struct i2c_puppy_data *data = dev->data;
+	
 
 	if (event_num == ARCHI_UDMA_I2C_EOT_EVT(config->id))
 		;
@@ -112,7 +112,7 @@ static int i2c_puppy_write_msg(const struct device *dev, struct i2c_msg *msg, ui
 static int i2c_puppy_read_msg(const struct device *dev, struct i2c_msg *msg, uint16_t addr)
 {
 	const struct i2c_puppy_config *config = dev->config;
-	struct i2c_puppy_data *data = dev->data;
+	
 	uint32_t base = config->base;
 	uint32_t cmd_buf[I2C_CMD_BUF_SIZE];
 	uint32_t index = 0;
@@ -238,13 +238,22 @@ static int i2c_puppy_init(const struct device *dev)
 	plp_udma_cg_set(udma_cg | BIT(UDMA_I2C0_ID + config->id));
 
 	data->clock_div = i2c_puppy_get_div(config->bus_freq);
-
-	if (config->id == 1) {
-		config_pad_func(config->sda_pin, 2);
-		config_pad_cfg(config->sda_pin, 0xfe);
-		config_pad_func(config->scl_pin, 2);
-		config_pad_cfg(config->scl_pin, 0xfe);
+	
+	switch (config->id) {
+	case 1:
+		config_pad_func(config->sda_pin, 0x2); // function 2 for spi1
+		config_pad_func(config->scl_pin, 0x2); // function 2 for spi1
+		break;
+	case 0:
+	    config_pad_func(config->sda_pin, 0x0); // function 0 for spi0
+		config_pad_func(config->scl_pin, 0x0); // function 0 for spi0
+		break;
+	default:
+	    return -EINVAL;
 	}
+	
+	config_pad_cfg(config->sda_pin, 0x1); // enable pull-up
+	config_pad_cfg(config->scl_pin, 0x1); // enable pull-up
 
 	// puppy_event_register_callback(&eot_event, (void *)dev);
 	// puppy_event_enable(ARCHI_UDMA_I2C_EOT_EVT(config->id));

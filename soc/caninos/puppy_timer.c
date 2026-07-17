@@ -54,20 +54,19 @@ static void puppy_timer_irq_handler(void *unused)
 
 static int sys_clock_driver_init(void)
 {
-	IRQ_CONNECT(PULP_TIMER_LO_IRQ, 0, puppy_timer_irq_handler, NULL, 0);
+	IRQ_CONNECT(PUPPY_TIMER_LO_IRQ, 0, puppy_timer_irq_handler, NULL, 0);
 
 	timer->start_lo = 0x0;
 	timer->reset_lo = 0x1;
 
-	while (timer->cfg_lo & BIT(1))
-		;
+	while (timer->cfg_lo & BIT(1));
 
 	timer->cfg_lo = 0x14;
 	timer->cmp_lo = CYC_PER_TICK - 1UL;
 	timer->cnt_lo = 0x0;
 
 	timer->start_lo = 0x1;
-	irq_enable(PULP_TIMER_LO_IRQ);
+	irq_enable(PUPPY_TIMER_LO_IRQ);
 
 	return 0;
 }

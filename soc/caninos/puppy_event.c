@@ -117,10 +117,10 @@ int sys_event_init(void)
 		PULP_REG(PULP_EU_FC_MASK0_REG + 4UL * i) = 0xffffffff;
 	}
 
-	IRQ_CONNECT(PULP_SOC_EVENT_IRQ, 0, puppy_event_irq_handler, NULL, 0);
+	IRQ_CONNECT(PUPPY_SOC_EVENT_IRQ, 0, puppy_event_irq_handler, NULL, 0);
 
 	irq_unlock(key);
-	irq_enable(PULP_SOC_EVENT_IRQ);
+	irq_enable(PUPPY_SOC_EVENT_IRQ);
 	return 0;
 }
 

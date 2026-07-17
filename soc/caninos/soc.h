@@ -14,11 +14,11 @@
 #define PULP_LPCOUNT1 0x7B6 /* Hardware Loop 1 Count Register */
 
 /* IRQ numbers */
-#define uDMA_IRQ           8  /* uDMA event */
-#define PULP_TIMER_LO_IRQ  10 /* Timer LO event */
-#define PULP_TIMER_HI_IRQ  11 /* Timer HI event */
-#define PULP_GPIO_IRQ      15 /* GPIO event */
-#define PULP_SOC_EVENT_IRQ 26 /* SOC event generator */
+#define uDMA_IRQ             8  /* uDMA event */
+#define PUPPY_TIMER_LO_IRQ  10 /* Timer LO event */
+#define PUPPY_TIMER_HI_IRQ  11 /* Timer HI event */
+#define PUPPY_GPIO_IRQ      15 /* GPIO event */
+#define PUPPY_SOC_EVENT_IRQ 26 /* SOC event generator */
 
 #define PULP_APB_TIMER_BASE_ADDR (0x1A10B000)
 

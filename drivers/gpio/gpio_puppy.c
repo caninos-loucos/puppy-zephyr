@@ -17,7 +17,7 @@ LOG_MODULE_REGISTER(gpio_puppy);
 
 struct gpio_puppy_config {
     struct gpio_driver_config common; /* this MUST be first */
-    uint32_t base;
+    uint32_t base, port;
 };
 
 struct gpio_puppy_data {
@@ -42,10 +42,18 @@ struct gpio_puppy {
     uint32_t PADCFG_24_31;  // BASEADDR + 0x34
 } __packed;
 
+#define PUPPY_MAX_GPIO (32U)
+
 static inline volatile struct gpio_puppy* GET_GPIO(const struct device *dev)
 {
     const struct gpio_puppy_config *config = dev->config;
     return (volatile struct gpio_puppy *)(config->base);
+}
+
+static inline uint32_t GET_PAD(const struct device *dev, gpio_pin_t pin)
+{
+    const struct gpio_puppy_config *config = dev->config;
+    return (uint32_t)(pin * (gpio_pin_t)(config->port));
 }
 
 static int gpio_puppy_configure(const struct device *dev,
@@ -54,7 +62,7 @@ static int gpio_puppy_configure(const struct device *dev,
     volatile struct gpio_puppy *gpio = GET_GPIO(dev);
 
     /* Check input parameters: pin number */
-    if (pin > 31) {
+    if (pin >= PUPPY_MAX_GPIO) {
         return -ENOTSUP;
     }
     /* Check input parameters: simultaneous in/out mode */
@@ -63,7 +71,7 @@ static int gpio_puppy_configure(const struct device *dev,
     }
 
     /* Configure pin as gpio */
-    config_pad_func(pin, 0x1); /* gpio is always function 0x1 */
+    config_pad_func(GET_PAD(dev, pin), 0x1); /* gpio is always function 0x1 */
 
     /* Enable the gpio's clock */
     gpio->GPIOEN |= BIT(pin);
@@ -95,7 +103,7 @@ static int gpio_puppy_port_set_masked_raw(const struct device *dev,
                                           gpio_port_pins_t mask,
                                           gpio_port_value_t value)
 {
-    GET_GPIO(dev)->PADOUT ^= (GET_GPIO(dev)->PADOUT & ~mask) | (value & mask);
+    GET_GPIO(dev)->PADOUT = (GET_GPIO(dev)->PADOUT & ~mask) | (value & mask);
     return 0;
 }
 
@@ -180,16 +188,6 @@ static int gpio_puppy_manage_callback(const struct device *dev,
     return gpio_manage_callback(&data->callbacks, callback, set);
 }
 
-static void gpio_puppy_isr(const struct device *dev)
-{
-    struct gpio_puppy_data *data = dev->data;
-
-    /* Interrupts cleared automatically when intstatus register is read */
-    uint32_t status = GET_GPIO(dev)->INTSTATUS;
-
-    gpio_fire_callbacks(&data->callbacks, dev, status);
-}
-
 static DEVICE_API(gpio, gpio_puppy_driver_api) = {
     .pin_configure = gpio_puppy_configure,
     .port_get_raw = gpio_puppy_port_get_raw,
@@ -201,28 +199,61 @@ static DEVICE_API(gpio, gpio_puppy_driver_api) = {
     .manage_callback = gpio_puppy_manage_callback,
 };
 
+static void gpio_puppy_fire_callbacks(const struct device *dev)
+{
+    struct gpio_puppy_data *data = dev->data;
+    
+    /* Interrupts cleared automatically when intstatus register is read */
+    uint32_t status = GET_GPIO(dev)->INTSTATUS;
+    
+    if (status != 0) {
+        gpio_fire_callbacks(&data->callbacks, dev, status);
+    }
+}
+
+static void gpio_puppy_isr(void *param);
+
+static bool gpio_puppy_isr_connected = false;
+
+static int gpio_puppy_init(const struct device *dev)
+{
+    if (!gpio_puppy_isr_connected)
+    {
+        IRQ_CONNECT(PUPPY_GPIO_IRQ, 0, gpio_puppy_isr, NULL, 0);
+        irq_enable(PUPPY_GPIO_IRQ);
+        gpio_puppy_isr_connected = true;
+    }
+    return 0;
+}
+
 /* GPIO driver registration */
-#define GPIO_PUPPY_INIT(idx)                                             \
-    static const struct gpio_puppy_config gpio_puppy_##idx##_config = {  \
+#define GPIO_PUPPY_INIT(_id)                                             \
+    static const struct gpio_puppy_config gpio_puppy_##_id##_config = {  \
         .common = {                                                      \
-            .port_pin_mask = GPIO_PORT_PIN_MASK_FROM_NGPIOS(32U),        \
+            .port_pin_mask = GPIO_PORT_PIN_MASK_FROM_DT_INST(_id),       \
         },                                                               \
-        .base = DT_INST_REG_ADDR(idx),                                   \
+        .base = DT_REG_ADDR(DT_NODELABEL(gpio##_id)),                    \
+        .port = _id,                                                     \
     };                                                                   \
-    static struct gpio_puppy_data gpio_puppy_##idx##_data;               \
+    static struct gpio_puppy_data gpio_puppy_##_id##_data;               \
                                                                          \
-    static int gpio_puppy_##idx##_init(const struct device *dev) {       \
-        IRQ_CONNECT(DT_INST_IRQN(idx), 0,                                \
-                    gpio_puppy_isr, DEVICE_DT_INST_GET(idx), 0);         \
-        irq_enable(DT_INST_IRQN(idx));                                   \
-        return 0;                                                        \
-    }                                                                    \
-    DEVICE_DT_INST_DEFINE(idx, gpio_puppy_##idx##_init,                  \
-                          NULL,                                          \
-                          &gpio_puppy_##idx##_data,                      \
-                          &gpio_puppy_##idx##_config,                    \
-                          PRE_KERNEL_1,                                  \
-                          CONFIG_GPIO_INIT_PRIORITY,                     \
-                          &gpio_puppy_driver_api);
+    DEVICE_DT_DEFINE(DT_NODELABEL(gpio##_id),                            \
+        gpio_puppy_init, NULL,                                           \
+        &gpio_puppy_##_id##_data, &gpio_puppy_##_id##_config,            \
+        PRE_KERNEL_1, CONFIG_GPIO_INIT_PRIORITY,                         \
+        &gpio_puppy_driver_api);
 
 DT_INST_FOREACH_STATUS_OKAY(GPIO_PUPPY_INIT)
+
+static void gpio_puppy_isr(void *param)
+{
+    ARG_UNUSED(param);
+    
+#if DT_NODE_HAS_STATUS_OKAY(DT_NODELABEL(gpio0))
+    gpio_puppy_fire_callbacks(DEVICE_DT_INST_GET(0));
+#endif
+
+#if DT_NODE_HAS_STATUS_OKAY(DT_NODELABEL(gpio1))
+    gpio_puppy_fire_callbacks(DEVICE_DT_INST_GET(1));
+#endif
+}
