@@ -53,7 +53,7 @@ static inline volatile struct gpio_puppy* GET_GPIO(const struct device *dev)
 static inline uint32_t GET_PAD(const struct device *dev, gpio_pin_t pin)
 {
     const struct gpio_puppy_config *config = dev->config;
-    return (uint32_t)(pin * (gpio_pin_t)(config->port));
+    return (uint32_t)(pin + (gpio_pin_t)(PUPPY_MAX_GPIO * config->port));
 }
 
 static int gpio_puppy_configure(const struct device *dev,
