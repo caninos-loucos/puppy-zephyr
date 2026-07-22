@@ -1,0 +1,5 @@
+config PULP_UDMA_FILTER
+    bool 
+	depends on DT_HAS_PULP_UDMA_FILTER_ENABLED
+    default y
+    help "Enable in-chip DSP accelerator with support for up tp 32-byte data width"
