@@ -9,6 +9,7 @@
 
 #ifndef _ASMLANGUAGE
 #include <stdint.h>
+#include "soc_apb_ctrl.h"
 
 static inline void config_pad_func(uint32_t pad, uint32_t func)
 {
