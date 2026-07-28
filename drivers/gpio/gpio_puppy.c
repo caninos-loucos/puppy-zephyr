@@ -219,8 +219,8 @@ static int gpio_puppy_init(const struct device *dev)
 {
     if (!gpio_puppy_isr_connected)
     {
-        IRQ_CONNECT(PUPPY_GPIO_IRQ, 0, gpio_puppy_isr, NULL, 0);
-        irq_enable(PUPPY_GPIO_IRQ);
+        IRQ_CONNECT(DT_INST_IRQN(0), 0, gpio_puppy_isr, NULL, 0);
+        irq_enable(DT_INST_IRQN(0));
         gpio_puppy_isr_connected = true;
     }
     return 0;

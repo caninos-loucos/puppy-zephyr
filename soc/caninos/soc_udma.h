@@ -54,8 +54,6 @@ static const pulp_udma_periph_t PUPPY_SPI_ID_TO_UDMA_ID[1] = {
 
 #define UDMA_SPI_PERIPH_COUNT ARRAY_SIZE(PUPPY_SPI_ID_TO_UDMA_ID)
 
-#define PUPPY_UDMA_REG_CG 0x1A102000
-
 static inline void puppy_udma_clock_enable(pulp_udma_periph_t periph) {
     *((volatile uint32_t*)(PUPPY_UDMA_REG_CG)) |= BIT((int)periph);
 }
@@ -64,14 +62,9 @@ static inline void puppy_udma_clock_disable(pulp_udma_periph_t periph) {
     *((volatile uint32_t*)(PUPPY_UDMA_REG_CG)) &= ~BIT((int)periph);
 }
 
-
 /*
  * Global register map
  */
-
-#define PULP_UDMA_BASE 0x1A102000
-
-
 
 // The UDMA register map is made of several channels, each channel area size is defined just below
 
@@ -208,8 +201,8 @@ static inline void puppy_udma_clock_disable(pulp_udma_periph_t periph) {
 #ifdef CONFIG_SOC_PUPPY_V2
 #define ARCHI_UDMA_UART1_RX_EVT(id)     ((UDMA_UART1_ID + id) * 4)
 #define ARCHI_UDMA_UART1_TX_EVT(id)     (ARCHI_UDMA_UART1_RX_EVT(id) + 1)
-#define ARCHI_UDMA_UART1_EOT_EVT(id)    (ARCHI_UDMA_UART0_RX_EVT(id) + 2)
-#define ARCHI_UDMA_UART1_RX_DAT_EVT(id) (ARCHI_UDMA_UART0_RX_EVT(id) + 3)
+#define ARCHI_UDMA_UART1_EOT_EVT(id)    (ARCHI_UDMA_UART1_RX_EVT(id) + 2)
+#define ARCHI_UDMA_UART1_RX_DAT_EVT(id) (ARCHI_UDMA_UART1_RX_EVT(id) + 3)
 #endif
 
 #define ARCHI_UDMA_FILTER_EOT_EVT(id) ((UDMA_FILTER_ID + id) * 4)
@@ -259,7 +252,7 @@ static inline uint32_t plp_udma_busy(unsigned channelOffset)
 	*/
 static inline void plp_udma_cg_set(uint32_t value)
 {
-	sys_write32(value, PULP_UDMA_BASE + UDMA_CONF_OFFSET + UDMA_CONF_CG_OFFSET);
+	sys_write32(value, PUPPY_UDMA_REG_CG + UDMA_CONF_OFFSET + UDMA_CONF_CG_OFFSET);
 }
 
 /** Returns peripheral clock-gating.
@@ -268,7 +261,7 @@ static inline void plp_udma_cg_set(uint32_t value)
 	*/
 static inline uint32_t plp_udma_cg_get()
 {
-	return sys_read32(PULP_UDMA_BASE + UDMA_CONF_OFFSET + UDMA_CONF_CG_OFFSET);
+	return sys_read32(PUPPY_UDMA_REG_CG + UDMA_CONF_OFFSET + UDMA_CONF_CG_OFFSET);
 }
 
 /** Configures input events

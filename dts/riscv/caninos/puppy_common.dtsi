@@ -6,57 +6,86 @@
 #include <zephyr/dt-bindings/gpio/gpio.h>
 
 / {
-    #address-cells = <1>;
-    #size-cells = <1>;
-    compatible = "caninos,puppy";
+	#address-cells = <1>;
+	#size-cells = <1>;
+	compatible = "caninos,puppy";
 
-    cpus {
-        #address-cells = <1>;
-        #size-cells = <0>;
+	cpus {
+		#address-cells = <1>;
+		#size-cells = <0>;
 
-        cpu0: cpu@0 {
-            device_type = "cpu";
-            compatible = "riscv";
-            riscv,isa = "rv32imfc_zicsr";
-            reg = <0>;
-        };
-    };
+		cpu0: cpu@0 {
+			device_type = "cpu";
+			compatible = "riscv";
+			riscv,isa = "rv32imfc_zicsr";
+			reg = <0>;
+		};
+	};
 
-    soc: soc {
-        #address-cells = <1>;
-        #size-cells = <1>;
-        compatible = "simple-bus";
-        ranges;
+	bootram: bootram@1c000000 {
+		device_type = "memory";
+		reg = <0x1c000000 DT_SIZE_K(64)>;
+	};
 
-        bootram: bootram@1c000000 {
-            device_type = "memory";
-            reg = <0x1c000000 DT_SIZE_K(64)>;
-        };
+	sram: sram@1c010000 {
+		device_type = "memory";
+		reg = <0x1c010000 DT_SIZE_K(256)>;
+	};
 
-        sram: sram@1c010000 {
-            device_type = "memory";
-            reg = <0x1c010000 DT_SIZE_K(256)>;
-        };
+	intc: interrupt-controller@1a109000 {
+		compatible = "caninos,puppy-intc";
+		reg = <0x1a109000 0x24>;
+		interrupt-controller;
+		#interrupt-cells = <1>;
+	};
 
-        gpio0: gpio@1a101000 {
-            compatible = "caninos,puppy-gpio";
-            gpio-controller;
-            #gpio-cells = <2>;
-            reg = <0x1a101000 0x38>;
-            ngpios = <32>;
-            //gpio-reserved-ranges = <>;
-            status = "okay";
-        };
+	evtc: interrupt-controller@1a106000 {
+		compatible = "caninos,puppy-evtc";
+		reg = <0x1a106000 0x24>, <0x1a109024 0x4>;
+		reg-names = "base", "fifo";
+		interrupt-controller;
+		#interrupt-cells = <1>;
+		interrupt-parent = <&intc>;
+		interrupts = <26>;
+	};
 
-        gpio1: gpio@1a101038 {
-            compatible = "caninos,puppy-gpio";
-            gpio-controller;
-            #gpio-cells = <2>;
-            reg = <0x1a101038 0x38>;
-            ngpios = <32>;
-            //gpio-reserved-ranges = <>;
-            status = "okay";
-        };
+	soc: soc {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		compatible = "simple-bus";
+		ranges;
+
+		timer: timer@1a10b000 {
+			compatible = "caninos,puppy-timer";
+			reg = <0x1a10b000 0x28>;
+			interrupt-parent = <&intc>;
+			interrupts = <10>;
+			status = "okay";
+		};
+
+		gpio0: gpio@1a101000 {
+			compatible = "caninos,puppy-gpio";
+			gpio-controller;
+			#gpio-cells = <2>;
+			reg = <0x1a101000 0x38>;
+			ngpios = <32>;
+			//gpio-reserved-ranges = <>;
+			interrupt-parent = <&intc>;
+			interrupts = <15>;
+			status = "okay";
+		};
+
+		gpio1: gpio@1a101038 {
+			compatible = "caninos,puppy-gpio";
+			gpio-controller;
+			#gpio-cells = <2>;
+			reg = <0x1a101038 0x38>;
+			ngpios = <32>;
+			//gpio-reserved-ranges = <>;
+			interrupt-parent = <&intc>;
+			interrupts = <15>;
+			status = "okay";
+		};
 
 		/* PWM0 is not externalized on chip */
 

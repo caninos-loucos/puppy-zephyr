@@ -1,0 +1,14 @@
+# Copyright (c) 2026, Edgar Bernardi Righi
+# SPDX-License-Identifier: Apache-2.0
+
+description: RISC-V Puppy Machine Timer.
+
+compatible: "caninos,puppy-timer"
+
+include: base.yaml
+
+properties:
+  reg:
+    required: true
+  interrupts:
+    required: true
