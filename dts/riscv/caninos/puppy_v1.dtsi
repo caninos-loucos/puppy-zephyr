@@ -39,9 +39,9 @@
         scl-pin = <25>;
     };
 
-    sdhc: sdhc@1a1022800 {
+    sdhc: sdhc@1a102280 {
         compatible = "caninos,puppy-sdhc";
-        reg = <0x1a1022800 0x80>;
+        reg = <0x1a102280 0x80>;
         dat0-gpios = <&gpio0 22 GPIO_ACTIVE_LOW>;
     };
 };
