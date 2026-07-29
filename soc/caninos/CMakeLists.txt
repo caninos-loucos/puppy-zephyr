@@ -6,11 +6,9 @@ zephyr_compile_options_ifndef(
   )
 
 zephyr_sources(
-  init.S
-  soc_irq.S
+  soc_init.S
   puppy_irq.c
   puppy_timer.c
-  puppy_event.c
   )
 
 set_property(GLOBAL APPEND PROPERTY extra_post_build_commands

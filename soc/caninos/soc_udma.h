@@ -1,17 +1,8 @@
 /*
- * Copyright (C) 2018 ETH Zurich and University of Bologna
+ * Copyright (c) 2026 Edgar Bernardi Righi - LSITEC
+ * Copyright (c) 2018 ETH Zurich and University of Bologna
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #ifndef __PUPPY_SOC_UDMA_H
@@ -20,40 +11,60 @@
 #ifndef _ASMLANGUAGE
 
 #include <zephyr/arch/riscv/sys_io.h>
-
-/* UDMA Peripheral IDs */
+#include <zephyr/sys/util.h>
 
 #ifdef CONFIG_SOC_PUPPY_V2
+
 typedef enum {
-	UDMA_UART0_ID,
-	UDMA_SPI0_ID,
-	UDMA_SPI1_ID,
-	UDMA_I2C0_ID,
-	UDMA_I2C1_ID,
-	UDMA_SDIO_ID,
-	UDMA_I2S_ID,
-	UDMA_CAM_ID,
-	UDMA_UART1_ID,
-	UDMA_FILTER_ID,
+    UDMA_UART0_ID  = 0,
+    UDMA_SPI0_ID   = 1,
+    UDMA_SPI1_ID   = 2,
+    UDMA_I2C0_ID   = 3,
+    UDMA_I2C1_ID   = 4,
+    UDMA_SDIO_ID   = 5,
+    UDMA_I2S_ID    = 6,
+    UDMA_CAM_ID    = 7,
+    UDMA_UART1_ID  = 8,
+    UDMA_FILTER_ID = 9,
 } pulp_udma_periph_t;
+
+static const pulp_udma_periph_t PUPPY_SPI_ID_TO_UDMA_ID[2] = {
+    [0] = UDMA_SPI0_ID,
+    [1] = UDMA_SPI1_ID,
+};
+
 #else
+
 typedef enum {
-	UDMA_UART0_ID,
-	UDMA_SPI0_ID,
-	UDMA_I2C0_ID,
-	UDMA_I2C1_ID,
-	UDMA_SDIO_ID,
-	UDMA_I2S_ID,
-	UDMA_CAM_ID,
-	UDMA_FILTER_ID,
+    UDMA_UART0_ID  = 0,
+    UDMA_SPI0_ID   = 1,
+    UDMA_I2C0_ID   = 2,
+    UDMA_I2C1_ID   = 3,
+    UDMA_SDIO_ID   = 4,
+    UDMA_I2S_ID    = 5,
+    UDMA_CAM_ID    = 6,
+    UDMA_FILTER_ID = 7,
 } pulp_udma_periph_t;
+
+static const pulp_udma_periph_t PUPPY_SPI_ID_TO_UDMA_ID[1] = {
+    [0] = UDMA_SPI0_ID,
+};
+
 #endif /* CONFIG_PUPPY_V2 */
+
+#define UDMA_SPI_PERIPH_COUNT ARRAY_SIZE(PUPPY_SPI_ID_TO_UDMA_ID)
+
+static inline void puppy_udma_clock_enable(pulp_udma_periph_t periph) {
+    *((volatile uint32_t*)(PUPPY_UDMA_REG_CG)) |= BIT((int)periph);
+}
+
+static inline void puppy_udma_clock_disable(pulp_udma_periph_t periph) {
+    *((volatile uint32_t*)(PUPPY_UDMA_REG_CG)) &= ~BIT((int)periph);
+}
 
 /*
  * Global register map
  */
-
-#define PULP_UDMA_BASE 0x1A102000
 
 // The UDMA register map is made of several channels, each channel area size is defined just below
 
@@ -190,8 +201,8 @@ typedef enum {
 #ifdef CONFIG_SOC_PUPPY_V2
 #define ARCHI_UDMA_UART1_RX_EVT(id)     ((UDMA_UART1_ID + id) * 4)
 #define ARCHI_UDMA_UART1_TX_EVT(id)     (ARCHI_UDMA_UART1_RX_EVT(id) + 1)
-#define ARCHI_UDMA_UART1_EOT_EVT(id)    (ARCHI_UDMA_UART0_RX_EVT(id) + 2)
-#define ARCHI_UDMA_UART1_RX_DAT_EVT(id) (ARCHI_UDMA_UART0_RX_EVT(id) + 3)
+#define ARCHI_UDMA_UART1_EOT_EVT(id)    (ARCHI_UDMA_UART1_RX_EVT(id) + 2)
+#define ARCHI_UDMA_UART1_RX_DAT_EVT(id) (ARCHI_UDMA_UART1_RX_EVT(id) + 3)
 #endif
 
 #define ARCHI_UDMA_FILTER_EOT_EVT(id) ((UDMA_FILTER_ID + id) * 4)
@@ -241,7 +252,7 @@ static inline uint32_t plp_udma_busy(unsigned channelOffset)
 	*/
 static inline void plp_udma_cg_set(uint32_t value)
 {
-	sys_write32(value, PULP_UDMA_BASE + UDMA_CONF_OFFSET + UDMA_CONF_CG_OFFSET);
+	sys_write32(value, PUPPY_UDMA_REG_CG + UDMA_CONF_OFFSET + UDMA_CONF_CG_OFFSET);
 }
 
 /** Returns peripheral clock-gating.
@@ -250,7 +261,7 @@ static inline void plp_udma_cg_set(uint32_t value)
 	*/
 static inline uint32_t plp_udma_cg_get()
 {
-	return sys_read32(PULP_UDMA_BASE + UDMA_CONF_OFFSET + UDMA_CONF_CG_OFFSET);
+	return sys_read32(PUPPY_UDMA_REG_CG + UDMA_CONF_OFFSET + UDMA_CONF_CG_OFFSET);
 }
 
 /** Configures input events
