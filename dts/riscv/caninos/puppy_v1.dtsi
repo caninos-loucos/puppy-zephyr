@@ -38,4 +38,10 @@
         sda-pin = <24>;
         scl-pin = <25>;
     };
+
+    sdhc: sdhc@1a1022800 {
+        compatible = "caninos,puppy-sdhc";
+        reg = <0x1a1022800 0x80>;
+        dat0-gpios = <&gpio0 22 GPIO_ACTIVE_LOW>;
+    };
 };

@@ -1,5 +1,9 @@
-# Copyright (c) 2026 Caninos Loucos
+#
+# Copyright (c) 2026 Ana Clara Forcelli <ana.forcelli@lsitec.org.br>
+# Copyright (c) 2026 Edgar Bernardi Righi <edgar.righi@lsitec.org.br>
+#
 # SPDX-License-Identifier: Apache-2.0
+#
 
 description: Puppy SDHC Controller
 
@@ -14,3 +18,18 @@ properties:
   reg:
     required: true
     description: register space
+  
+  pwr-gpios:
+    type: phandle-array
+    description: |
+      Power pin
+      This is a configurable pin to deliver power supply to the SD card.
+      It is configured as a GPIO in order to execute power toggles and
+      reinitialize the SD slave when necessary.
+
+  dat0-gpios:
+    type: phandle-array
+    required: true
+    description: |
+      DAT0 pin
+      dat0 pin to check if the device is busy.
