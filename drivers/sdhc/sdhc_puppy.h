@@ -1,49 +1,24 @@
-/* Copyright (c) 2026 Caninos Loucos
- *SPDX-License-Identifier: Apache-2.0
+/*
+ * Copyright (c) 2026 Ana Clara Forcelli <ana.forcelli@lsitec.org.br>
+ * Copyright (c) 2026 Edgar Bernardi Righi <edgar.righi@lsitec.org.br>
+ *
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 
 #ifndef __SDHC_PUPPY_H__
 #define __SDHC_PUPPY_H__
 
-#include <soc.h>
-#include <soc_pad.h>
-#include <soc_event.h>
-
-//  SDIO REGISTERS
-#define SDIO_RX_SADDR     0x0
-#define SDIO_RX_SIZE      0x4
-#define SDIO_RX_CFG       0x8
-#define SDIO_RX_INITCFG   0xC
-#define SDIO_TX_SADDR     0x10
-#define SDIO_TX_SIZE      0x14
-#define SDIO_TX_CFG       0x18
-#define SDIO_TX_INITCFG   0x1C
-#define SDIO_CMD_OP       0x20
-#define SDIO_CMD_ARG      0x24
-#define SDIO_DATA_SETUP   0x28
-#define SDIO_START        0x2C
-#define SDIO_RSP0         0x30
-#define SDIO_RSP1         0x34
-#define SDIO_RSP2         0x38
-#define SDIO_RSP3         0x3C
-#define SDIO_CLK_DIV      0x40
-#define SDIO_STATUS       0x44
-#define SDIO_STOPCMD_OP   0x48
-#define SDIO_STOPCMD_ARG  0x4C
-#define SDIO_DATA_TIMEOUT 0x50
-#define SDIO_BLOCKS_LEFT  0x54
-
 //  CMD_OP bit position in SDIO_CMD_OP
 #define CMD_OP_OFST 8
 
 //  RESPONSE TYPE and bit position
-#define RSP_TYPE_OFST   0
-#define NO_RSP          0x0
-#define RSP_48_CRC      0x1
-#define RSP_48_NO_CRC   0x2
-#define RSP_136         0x3
-#define RSP_48_BUSY_CHK 0x4
+#define RSP_TYPE_OFST   (0)
+#define NO_RSP          (0x0)
+#define RSP_48_CRC      (0x1)
+#define RSP_48_NO_CRC   (0x2)
+#define RSP_136         (0x3)
+#define RSP_48_BUSY_CHK (0x4)
 
 //  SDIO_DATA_SETUP bit fields
 #define DATA_EN(x)    (x & 0x1)           // 1 bit
