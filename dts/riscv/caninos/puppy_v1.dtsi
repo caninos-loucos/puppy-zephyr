@@ -38,4 +38,10 @@
         sda-pin = <24>;
         scl-pin = <25>;
     };
+
+    filt: filt@1a102400 {
+        compatible = "pulp,udma-filter";
+        reg = <0x1a102400 0x80>;
+        // caps?
+    };
 };

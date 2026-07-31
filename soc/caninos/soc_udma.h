@@ -252,6 +252,15 @@ static inline uint32_t plp_udma_busy(unsigned channelOffset)
 	return (sys_read32(channelOffset + UDMA_CHANNEL_CFG_OFFSET) & UDMA_CHANNEL_CFG_EN);
 }
 
+/** Clear channel
+ *
+	\param   channelOffset Offset of the channel
+*/
+static inline void plp_udma_clr(unsigned channelBase)
+{
+	sys_write32(UDMA_CHANNEL_CFG_CLEAR, channelBase + UDMA_CHANNEL_CFG_OFFSET);
+}
+
 /** Configures peripheral clock-gating.
  *
 	\param   value    New configuration. There is 1 bit per peripheral, 0 means the peripheral

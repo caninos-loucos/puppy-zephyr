@@ -550,6 +550,7 @@ primux	Primux Trading, S.L.
 probox2	PROBOX2 (by W2COMP Co., Ltd.)
 prt	Protonic Holland
 ptc	Princeton Technology Corp.
+pulp	PULP Platform.
 pulsedlight	PulsedLight, Inc
 purism	Purism, SPC
 puya	Puya Semiconductor (Shanghai) Co., Ltd
