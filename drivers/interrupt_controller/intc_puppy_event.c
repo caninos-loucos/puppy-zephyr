@@ -92,11 +92,9 @@ static void puppy_evtc_isr(const void *arg)
 	const struct _isr_table_entry *entry;
 	uint32_t num = *(config->fifo);
 
-	if (num <= 0xff) {
+	if (num < CONFIG_MAX_IRQ_PER_AGGREGATOR) {
 		entry = &_sw_isr_table[num + CONFIG_2ND_LVL_ISR_TBL_OFFSET];
-		if (entry->isr != NULL) {
-			entry->isr(entry->arg);
-		}
+		entry->isr(entry->arg);
 	}
 }
 

@@ -6,6 +6,7 @@ config PUPPY_EVENT_INTC
 	default y
 	select MULTI_LEVEL_INTERRUPTS
 	select 2ND_LEVEL_INTERRUPTS
+	depends on DT_HAS_CANINOS_PUPPY_EVTC_ENABLED
 	help
 	  Puppy Event Interrupt Controller provides support for device events.
 

@@ -1,62 +1,87 @@
 /*
  * SPDX-License-Identifier: Apache-2.0
  */
+#include <zephyr/dt-bindings/interrupt-controller/puppy-v2-evtc.h>
 #include "puppy_common.dtsi"
 
 &soc {
-    uart0: uart@1a102080 {
-        compatible = "caninos,puppy-uart";
-        uart-controller;
-        reg = <0x1a102080 0x54>;
-        uart-id = <0>;
-    };
-    
-    uart1: uart@1a102480 {
-        compatible = "caninos,puppy-uart";
-        uart-controller;
-        reg = <0x1a102480 0x54>;
-        uart-id = <1>;
-    };
+	uart0: uart@1a102080 {
+		compatible = "caninos,puppy-uart";
+		uart-controller;
+		reg = <0x1a102080 0x54>;
+		uart-id = <0>;
+		interrupt-parent = <&evtc>; 
+		interrupts = <PUPPY_EVTC_UART0_TX_IRQ>,
+			     <PUPPY_EVTC_UART0_RX_IRQ>;
+		interrupt-names = "tx", "rx";
+	};
 
-    spi0: spi@1a102100 {
-        compatible = "caninos,puppy-spi";
-        #address-cells = <1>;
-        #size-cells = <0>;
-        reg = <0x1a102100 0x28>;
-        spi-id = <0>;
-    };
+	uart1: uart@1a102480 {
+		compatible = "caninos,puppy-uart";
+		uart-controller;
+		reg = <0x1a102480 0x54>;
+		uart-id = <1>;
+		interrupt-parent = <&evtc>; 
+		interrupts = <PUPPY_EVTC_UART1_TX_IRQ>,
+			     <PUPPY_EVTC_UART1_RX_IRQ>;
+		interrupt-names = "tx", "rx";
+	};
 
-    spi1: spi@1a102180 {
-        compatible = "caninos,puppy-spi";
-        #address-cells = <1>;
-        #size-cells = <0>;
-        reg = <0x1a102180 0x28>;
-        spi-id = <1>;
-    };
+	spi0: spi@1a102100 {
+		compatible = "caninos,puppy-spi";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		reg = <0x1a102100 0x28>;
+		spi-id = <0>;
+		interrupt-parent = <&evtc>;
+		interrupts = <PUPPY_EVTC_SPI0_TX_IRQ>,
+			     <PUPPY_EVTC_SPI0_RX_IRQ>;
+		interrupt-names = "tx", "rx";
+	};
 
-    i2c0: i2c@1a102200 {
-        compatible = "caninos,puppy-i2c";
-        #address-cells = <1>;
-        #size-cells = <0>;
-        reg = <0x1a102200 0x34>;
-        i2c-id = <0>;
-        sda-pin = <26>;
-        scl-pin = <27>;
-    };
+	spi1: spi@1a102180 {
+		compatible = "caninos,puppy-spi";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		reg = <0x1a102180 0x28>;
+		spi-id = <1>;
+		interrupt-parent = <&evtc>;
+		interrupts = <PUPPY_EVTC_SPI1_TX_IRQ>,
+			     <PUPPY_EVTC_SPI1_RX_IRQ>;
+		interrupt-names = "tx", "rx";
+	};
 
-    i2c1: i2c@1a102280 {
-        compatible = "caninos,puppy-i2c";
-        #address-cells = <1>;
-        #size-cells = <0>;
-        reg = <0x1a102280 0x34>;
-        i2c-id = <1>;
-        sda-pin = <9>;
-        scl-pin = <10>;
-    };
+	i2c0: i2c@1a102200 {
+		compatible = "caninos,puppy-i2c";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		reg = <0x1a102200 0x34>;
+		i2c-id = <0>;
+		sda-pin = <26>;
+		scl-pin = <27>;
+		interrupt-parent = <&evtc>;
+		interrupts = <PUPPY_EVTC_I2C0_RX_IRQ>,
+			     <PUPPY_EVTC_I2C0_EOT_IRQ>;
+		interrupt-names = "rx", "eot";
+	};
 
-    sdhc: sdhc@1a102300 {
-        compatible = "caninos,puppy-sdhc";
-        reg = <0x1a102300 0x80>;
-        dat0-gpios = <&gpio0 22 GPIO_ACTIVE_LOW>;
-    };
+	i2c1: i2c@1a102280 {
+		compatible = "caninos,puppy-i2c";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		reg = <0x1a102280 0x34>;
+		i2c-id = <1>;
+		sda-pin = <9>;
+		scl-pin = <10>;
+		interrupt-parent = <&evtc>;
+		interrupts = <PUPPY_EVTC_I2C1_RX_IRQ>,
+			     <PUPPY_EVTC_I2C1_EOT_IRQ>;
+		interrupt-names = "rx", "eot";
+	};
+
+	sdhc: sdhc@1a102300 {
+		compatible = "caninos,puppy-sdhc";
+		reg = <0x1a102300 0x80>;
+		dat0-gpios = <&gpio0 22 GPIO_ACTIVE_LOW>;
+	};
 };

@@ -17,8 +17,12 @@ struct uart_puppy_data {
 	uint8_t txbuf[UART_PUPPY_MAX_BUFFER_SIZE];
 	uint8_t rxbuf[UART_PUPPY_MAX_BUFFER_SIZE];
 
-	bool rx_byte_available;
-	bool tx;
+	volatile bool rx_byte_available;
+	volatile bool tx;
+};
+
+struct uart_puppy_config {
+	unsigned int tx_irq, rx_irq;
 };
 
 static int uart_puppy_configure(const struct device *dev, const struct uart_config *cfg)
@@ -131,9 +135,9 @@ static int uart_puppy_fifo_read(const struct device *dev, uint8_t *rx_data, cons
 
 static void uart_puppy_irq_rx_enable(const struct device *dev)
 {
+	const struct uart_puppy_config *config = dev->config;
 	struct uart_puppy_data *data = dev->data;
-	uint32_t key;
-	key = irq_lock();
+	uint32_t key = irq_lock();
 
 	sys_write32(sys_read32(data->base + UART_SETUP) | UART_RXEN, data->base + UART_SETUP);
 
@@ -144,15 +148,8 @@ static void uart_puppy_irq_rx_enable(const struct device *dev)
 	sys_write32(sys_read32(data->base + UART_STATUS) & ~UART_CLEAN_FIFO,
 		    data->base + UART_STATUS);
 
-	if (data->id == 0) {
-		puppy_event_enable(ARCHI_UDMA_UART0_RX_EVT(0));
-	}
+	irq_enable(config->rx_irq);
 
-#ifdef CONFIG_SOC_PUPPY_V2
-	else if (data->id == 1) {
-		puppy_event_enable(ARCHI_UDMA_UART1_RX_EVT(0));
-	}
-#endif
 	data->rx_byte_available = false;
 
 	// UART only sends RX interrupt when a set bytes of data arrive.
@@ -164,22 +161,14 @@ static void uart_puppy_irq_rx_enable(const struct device *dev)
 
 static void uart_puppy_irq_rx_disable(const struct device *dev)
 {
+	const struct uart_puppy_config *config = dev->config;
 	struct uart_puppy_data *data = dev->data;
-	uint32_t key;
-
-	key = irq_lock();
+	uint32_t key = irq_lock();
 
 	sys_write32(sys_read32(data->base + UART_IRQEN) & ~UART_RXIRQEN, data->base + UART_IRQEN);
 
-	if (data->id == 0) {
-		puppy_event_disable(ARCHI_UDMA_UART0_RX_EVT(0));
-	}
+	irq_disable(config->rx_irq);
 
-#ifdef CONFIG_SOC_PUPPY_V2
-	else if (data->id == 1) {
-		puppy_event_disable(ARCHI_UDMA_UART1_RX_EVT(0));
-	}
-#endif
 	data->rx_byte_available = false;
 
 	sys_write32(sys_read32(data->base + UART_SETUP) & ~UART_RXEN, data->base + UART_SETUP);
@@ -219,19 +208,12 @@ static int uart_puppy_fifo_fill(const struct device *dev, const uint8_t *tx_data
 
 static void uart_puppy_irq_tx_enable(const struct device *dev)
 {
+	const struct uart_puppy_config *config = dev->config;
 	struct uart_puppy_data *data = dev->data;
-	uint32_t key;
-	key = irq_lock();
+	uint32_t key = irq_lock();
 
-	if (data->id == 0) {
-		puppy_event_enable(ARCHI_UDMA_UART0_TX_EVT(0));
-	}
+	irq_enable(config->tx_irq);
 
-#ifdef CONFIG_SOC_PUPPY_V2
-	else if (data->id == 1) {
-		puppy_event_enable(ARCHI_UDMA_UART1_TX_EVT(0));
-	}
-#endif
 	data->tx = false;
 
 	sys_write32(sys_read32(data->base + UART_SETUP) | UART_TXEN, data->base + UART_SETUP);
@@ -241,20 +223,12 @@ static void uart_puppy_irq_tx_enable(const struct device *dev)
 
 static void uart_puppy_irq_tx_disable(const struct device *dev)
 {
+	const struct uart_puppy_config *config = dev->config;
 	struct uart_puppy_data *data = dev->data;
-	uint32_t key;
+	uint32_t key = irq_lock();
 
-	key = irq_lock();
+	irq_disable(config->tx_irq);
 
-	if (data->id == 0) {
-		puppy_event_disable(ARCHI_UDMA_UART0_TX_EVT(0));
-	}
-
-#ifdef CONFIG_SOC_PUPPY_V2
-	else if (data->id == 1) {
-		puppy_event_disable(ARCHI_UDMA_UART1_TX_EVT(0));
-	}
-#endif
 	data->tx = false;
 
 	sys_write32(sys_read32(data->base + UART_SETUP) & ~UART_TXEN, data->base + UART_SETUP);
@@ -295,38 +269,9 @@ static void uart_puppy_irq_callback_set(const struct device *dev, uart_irq_callb
 	data->user_data = user_data;
 }
 
-static void uart_puppy_irq_handler(int event_num, const struct device *dev)
-{
-	struct uart_puppy_data *data = dev->data;
-
-	switch (event_num) {
-	case ARCHI_UDMA_UART0_TX_EVT(0):
-#ifdef CONFIG_SOC_PUPPY_V2
-	case ARCHI_UDMA_UART1_TX_EVT(0):
-#endif
-		data->tx = false;
-		goto callback;
-	case ARCHI_UDMA_UART0_RX_EVT(0):
-#ifdef CONFIG_SOC_PUPPY_V2
-	case ARCHI_UDMA_UART1_RX_EVT(0):
-#endif
-		data->rx_byte_available = true;
-		goto callback;
-	default:
-		break;
-	}
-
-	return;
-
-callback:
-	if (data->callback != NULL) {
-		data->callback(dev, data->user_data);
-	}
-}
-
 #endif /* CONFIG_UART_INTERRUPT_DRIVEN */
 
-static int uart_puppy_init(const struct device *dev)
+static int uart_puppy_common_init(const struct device *dev)
 {
 	struct uart_puppy_data *data = dev->data;
 	const struct uart_config *config = &(data->uart_config);
@@ -336,18 +281,45 @@ static int uart_puppy_init(const struct device *dev)
 	if (data->id == 0) {
 		plp_udma_cg_set(cg_conf | BIT(UDMA_UART0_ID));
 	}
-
 #ifdef CONFIG_SOC_PUPPY_V2
 	else if (data->id == 1) {
 		plp_udma_cg_set(cg_conf | BIT(UDMA_UART1_ID));
 	}
 #endif /* CONFIG_SOC_PUPPY_V2 */
 
-#ifdef CONFIG_UART_INTERRUPT_DRIVEN
-	puppy_event_register_callback((event_callback_t)&uart_puppy_irq_handler, (void *)dev);
-#endif /* CONFIG_UART_INTERRUPT_DRIVEN */
-
 	return uart_puppy_configure(dev, config);
+}
+
+static void uart_puppy_tx_irq(void *userdata)
+{
+#ifdef CONFIG_UART_INTERRUPT_DRIVEN
+	const struct device *dev = (const struct device *) userdata;
+	struct uart_puppy_data *data = dev->data;
+	
+	data->tx = false;
+	
+	if (data->callback != NULL) {
+		data->callback(dev, data->user_data);
+	}
+#else
+	ARG_UNUSED(userdata);
+#endif
+}
+
+static void uart_puppy_rx_irq(void *userdata)
+{
+#ifdef CONFIG_UART_INTERRUPT_DRIVEN
+	const struct device *dev = (const struct device *) userdata;
+	struct uart_puppy_data *data = dev->data;
+
+	data->rx_byte_available = true;
+	
+	if (data->callback != NULL) {
+		data->callback(dev, data->user_data);
+	}
+#else
+	ARG_UNUSED(userdata);
+#endif
 }
 
 static DEVICE_API(uart, uart_puppy_driver_api) = {
@@ -370,8 +342,23 @@ static DEVICE_API(uart, uart_puppy_driver_api) = {
 #endif
 };
 
-#define PUPPY_UART_INIT(idx)                                                                       \
-                                                                                                   \
+#define PUPPY_UART_INIT(idx)						     \
+	static int uart_puppy_##idx##_init(const struct device *dev)	     \
+	{								     \
+		int ret = uart_puppy_common_init(dev);			     \
+		if (ret != 0) {						     \
+			return ret;					     \
+		}							     \
+		IRQ_CONNECT(DT_INST_IRQN_BY_NAME(idx, tx), 0,		     \
+			uart_puppy_tx_irq, DEVICE_DT_INST_GET(idx), 0);	     \
+		IRQ_CONNECT(DT_INST_IRQN_BY_NAME(idx, rx), 0,		     \
+			uart_puppy_rx_irq, DEVICE_DT_INST_GET(idx), 0);	     \
+		return 0;						     \
+	}								     \
+	static const struct uart_puppy_config uart_puppy_##idx##_config = {  \
+		.tx_irq = DT_INST_IRQN_BY_NAME(idx, tx),		     \
+		.rx_irq = DT_INST_IRQN_BY_NAME(idx, rx),		     \
+	};								     \
 	static struct uart_puppy_data uart_puppy_##idx##_data = {                                  \
 		.base = DT_INST_REG_ADDR(idx),                                                     \
 		.id = DT_INST_PROP(idx, uart_id),                                                  \
@@ -386,7 +373,7 @@ static DEVICE_API(uart, uart_puppy_driver_api) = {
 			.parity = DT_INST_ENUM_IDX_OR(idx, parity, UART_CFG_PARITY_NONE),          \
 		}};                                                                                \
                                                                                                    \
-	DEVICE_DT_INST_DEFINE(idx, uart_puppy_init, NULL, &uart_puppy_##idx##_data, NULL,          \
-			      PRE_KERNEL_1, CONFIG_SERIAL_INIT_PRIORITY, &uart_puppy_driver_api);
+	DEVICE_DT_INST_DEFINE(idx, uart_puppy_##idx##_init, NULL, &uart_puppy_##idx##_data, &uart_puppy_##idx##_config,          \
+			      PRE_KERNEL_2, CONFIG_SERIAL_INIT_PRIORITY, &uart_puppy_driver_api);
 
 DT_INST_FOREACH_STATUS_OKAY(PUPPY_UART_INIT);

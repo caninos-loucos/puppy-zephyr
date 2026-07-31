@@ -5,13 +5,6 @@
 #ifndef __PUPPY_SOC_H_
 #define __PUPPY_SOC_H_
 
-/* IRQ numbers */
-//#define uDMA_IRQ             8  /* uDMA event */
-//#define PUPPY_TIMER_LO_IRQ  10 /* Timer LO event */
-//#define PUPPY_TIMER_HI_IRQ  11 /* Timer HI event */
-//#define PUPPY_GPIO_IRQ      15 /* GPIO event */
-//#define PUPPY_SOC_EVENT_IRQ 26 /* SOC event generator */
-
 #include <zephyr/devicetree.h>
 
 #define PUPPY_UDMA_REG_CG 0x1A102000
@@ -23,5 +16,18 @@
 
 /* uDMA configuration */
 #include "soc_udma.h"
+
+#ifndef DT_IRQN_BY_NAME
+#define DT_IRQN_BY_NAME(node_id, name)                                \
+	COND_CODE_1(IS_ENABLED(CONFIG_MULTI_LEVEL_INTERRUPTS),        \
+		((IRQ_TO_L2(DT_IRQ_BY_NAME(node_id, name, irq)) |     \
+		  DT_IRQ(DT_IRQ_INTC_BY_NAME(node_id, name), irq))),  \
+		(DT_IRQ_BY_NAME(node_id, name, irq)))
+#endif
+
+#ifndef DT_INST_IRQN_BY_NAME
+#define DT_INST_IRQN_BY_NAME(inst, name) \
+	DT_IRQN_BY_NAME(DT_DRV_INST(inst), name)
+#endif
 
 #endif /* __PUPPY_SOC_H_ */

@@ -4,6 +4,7 @@
 /dts-v1/;
 #include <mem.h>
 #include <zephyr/dt-bindings/gpio/gpio.h>
+#include <zephyr/dt-bindings/interrupt-controller/puppy-intc.h>
 
 / {
 	#address-cells = <1>;
@@ -46,7 +47,7 @@
 		interrupt-controller;
 		#interrupt-cells = <1>;
 		interrupt-parent = <&intc>;
-		interrupts = <26>;
+		interrupts = <PUPPY_INTC_EVT_FIFO_VALID_IRQ>;
 	};
 
 	soc: soc {
@@ -59,7 +60,7 @@
 			compatible = "caninos,puppy-timer";
 			reg = <0x1a10b000 0x28>;
 			interrupt-parent = <&intc>;
-			interrupts = <10>;
+			interrupts = <PUPPY_INTC_TIMER_LO_IRQ>;
 			status = "okay";
 		};
 
@@ -71,7 +72,7 @@
 			ngpios = <32>;
 			//gpio-reserved-ranges = <>;
 			interrupt-parent = <&intc>;
-			interrupts = <15>;
+			interrupts = <PUPPY_INTC_GPIO_EVENT_IRQ>;
 			status = "okay";
 		};
 
@@ -83,7 +84,7 @@
 			ngpios = <32>;
 			//gpio-reserved-ranges = <>;
 			interrupt-parent = <&intc>;
-			interrupts = <15>;
+			interrupts = <PUPPY_INTC_GPIO_EVENT_IRQ>;
 			status = "okay";
 		};
 
