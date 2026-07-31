@@ -1,0 +1,12 @@
+# Copyright (c) Ana Clara Forcelli <ana.forcelli@lsitec.org.br>
+# SPDX-License-Identifier: Apache-2.0
+
+description: PULP's UDMA Filter DSP Accelerator
+
+compatible: "pulp,udma-filter"
+
+include: base.yaml
+
+properties:
+  reg:
+    required: true
