@@ -13,60 +13,9 @@
 #include <zephyr/arch/riscv/sys_io.h>
 #include <zephyr/sys/util.h>
 
-#ifdef CONFIG_SOC_PUPPY_V2
-
-typedef enum {
-    UDMA_UART0_ID  = 0,
-    UDMA_SPI0_ID   = 1,
-    UDMA_SPI1_ID   = 2,
-    UDMA_I2C0_ID   = 3,
-    UDMA_I2C1_ID   = 4,
-    UDMA_SDIO_ID   = 5,
-    UDMA_I2S_ID    = 6,
-    UDMA_CAM_ID    = 7,
-    UDMA_UART1_ID  = 8,
-    UDMA_FILTER_ID = 9,
-} pulp_udma_periph_t;
-
-static const pulp_udma_periph_t PUPPY_SPI_ID_TO_UDMA_ID[2] = {
-    [0] = UDMA_SPI0_ID,
-    [1] = UDMA_SPI1_ID,
-};
-
-#else
-
-typedef enum {
-    UDMA_UART0_ID  = 0,
-    UDMA_SPI0_ID   = 1,
-    UDMA_I2C0_ID   = 2,
-    UDMA_I2C1_ID   = 3,
-    UDMA_SDIO_ID   = 4,
-    UDMA_I2S_ID    = 5,
-    UDMA_CAM_ID    = 6,
-    UDMA_FILTER_ID = 7,
-} pulp_udma_periph_t;
-
-static const pulp_udma_periph_t PUPPY_SPI_ID_TO_UDMA_ID[1] = {
-    [0] = UDMA_SPI0_ID,
-};
-
-#endif /* CONFIG_PUPPY_V2 */
-
-#define UDMA_SPI_PERIPH_COUNT ARRAY_SIZE(PUPPY_SPI_ID_TO_UDMA_ID)
-
-static inline void puppy_udma_clock_enable(pulp_udma_periph_t periph) {
-    *((volatile uint32_t*)(PUPPY_UDMA_REG_CG)) |= BIT((int)periph);
-}
-
-static inline void puppy_udma_clock_disable(pulp_udma_periph_t periph) {
-    *((volatile uint32_t*)(PUPPY_UDMA_REG_CG)) &= ~BIT((int)periph);
-}
-
 /*
  * Global register map
  */
-
-// The UDMA register map is made of several channels, each channel area size is defined just below
 
 // Periph area size in log2
 #define UDMA_PERIPH_AREA_SIZE_LOG2 7
@@ -135,79 +84,6 @@ static inline void puppy_udma_clock_disable(pulp_udma_periph_t periph) {
 #define UDMA_CHANNEL_CFG_SIZE_32    (2 << UDMA_CHANNEL_CFG_SIZE_BIT) // Configure for 32-bits transfer
 #define UDMA_CHANNEL_CFG_CONT       (1 << UDMA_CHANNEL_CFG_CONT_BIT) // Configure for continuous mode
 
-/*
- * Macros
- */
-
-// Returns the configuration of an input event. Several values can be ORed together to form the full
-// configuration
-#define UDMA_CONF_EVTIN_EVT(udmaId, globalId) ((globalId) << (udmaId * 8))
-
-// Return the offset of a peripheral from its identifier
-#define UDMA_PERIPH_OFFSET(id) (((id) << UDMA_PERIPH_AREA_SIZE_LOG2) + UDMA_FIRST_CHANNEL_OFFSET)
-
-// Returns the identifier of a peripheral from its offset
-#define UDMA_PERIPH_GET(offset) ((offset) >> UDMA_PERIPH_AREA_SIZE_LOG2)
-
-// Return the offset of a channel from its identifier
-#define UDMA_CHANNEL_OFFSET(id) ((id) << UDMA_CHANNEL_SIZE_LOG2)
-
-// Returns the identifier of a channel from its offset
-#define UDMA_CHANNEL_GET(offset) ((offset) >> UDMA_CHANNEL_SIZE_LOG2)
-
-// Return the id of a channel from the peripheral id
-#define UDMA_CHANNEL_ID(id) ((id) * 2)
-
-// Return the number of events per peripheral
-#define UDMA_NB_PERIPH_EVENTS_LOG2 2
-#define UDMA_NB_PERIPH_EVENTS      (1 << UDMA_NB_PERIPH_EVENTS_LOG2)
-
-// Return the periph id from the channel
-#define UDMA_PERIPH_ID(id) ((id) / 2)
-
-// Return the event id of a channel from the peripheral id
-#define UDMA_EVENT_ID(id) ((id) * UDMA_NB_PERIPH_EVENTS)
-
-#define ARCHI_SOC_EVENT_UDMA_RX(periph) ((periph) * 2)
-#define ARCHI_SOC_EVENT_UDMA_TX(periph) ((periph) * 2 + 1)
-
-/*** UDMA EVENT IDS ***/
-// id : number relative to number of same peripheral type (except ) (NOT UDMA ID)
-#define ARCHI_UDMA_UART0_RX_EVT(id)     ((UDMA_UART0_ID + id) * 4)
-#define ARCHI_UDMA_UART0_TX_EVT(id)     (ARCHI_UDMA_UART0_RX_EVT(id) + 1)
-#define ARCHI_UDMA_UART0_EOT_EVT(id)    (ARCHI_UDMA_UART0_RX_EVT(id) + 2)
-#define ARCHI_UDMA_UART0_RX_DAT_EVT(id) (ARCHI_UDMA_UART0_RX_EVT(id) + 3)
-
-#define ARCHI_UDMA_SPIM_RX_EVT(id)  ((UDMA_SPI0_ID + id) * 4)
-#define ARCHI_UDMA_SPIM_TX_EVT(id)  (ARCHI_UDMA_SPIM_RX_EVT(id) + 1)
-#define ARCHI_UDMA_SPIM_CMD_EVT(id) (ARCHI_UDMA_SPIM_RX_EVT(id) + 2)
-#define ARCHI_UDMA_SPIM_EOT_EVT(id) (ARCHI_UDMA_SPIM_RX_EVT(id) + 3)
-
-#define ARCHI_UDMA_I2C_RX_EVT(id)  ((UDMA_I2C0_ID + id) * 4)
-#define ARCHI_UDMA_I2C_TX_EVT(id)  (ARCHI_UDMA_I2C_RX_EVT(id) + 1)
-#define ARCHI_UDMA_I2C_CMD_EVT(id) (ARCHI_UDMA_I2C_RX_EVT(id) + 2)
-#define ARCHI_UDMA_I2C_EOT_EVT(id) (ARCHI_UDMA_I2C_RX_EVT(id) + 3)
-
-#define ARCHI_UDMA_SDIO_RX_EVT(id)  ((UDMA_SDIO_ID + id) * 4)
-#define ARCHI_UDMA_SDIO_TX_EVT(id)  (ARCHI_UDMA_SDIO_RX_EVT(id) + 1)
-#define ARCHI_UDMA_SDIO_EOT_EVT(id) (ARCHI_UDMA_SDIO_RX_EVT(id) + 2)
-#define ARCHI_UDMA_SDIO_ERR_EVT(id) (ARCHI_UDMA_SDIO_RX_EVT(id) + 3)
-
-#define ARCHI_UDMA_I2S_RX_EVT(id) ((UDMA_I2S_ID + id) * 4)
-#define ARCHI_UDMA_I2S_TX_EVT(id) (ARCHI_UDMA_I2S_RX_EVT(id) + 1)
-
-#define ARCHI_UDMA_CAM_RX_EVT(id) ((UDMA_CAM_ID + id) * 4)
-
-#ifdef CONFIG_SOC_PUPPY_V2
-#define ARCHI_UDMA_UART1_RX_EVT(id)     ((UDMA_UART1_ID + id) * 4)
-#define ARCHI_UDMA_UART1_TX_EVT(id)     (ARCHI_UDMA_UART1_RX_EVT(id) + 1)
-#define ARCHI_UDMA_UART1_EOT_EVT(id)    (ARCHI_UDMA_UART1_RX_EVT(id) + 2)
-#define ARCHI_UDMA_UART1_RX_DAT_EVT(id) (ARCHI_UDMA_UART1_RX_EVT(id) + 3)
-#endif
-
-#define ARCHI_UDMA_FILTER_EOT_EVT(id) ((UDMA_FILTER_ID + id) * 4)
-#define ARCHI_UDMA_FILTER_ACT_EVT(id) ((UDMA_FILTER_ID + id) * 4 + 1)
-
 /** Tell if a new transfer can be enqueued to a UDMA channel.
  *
 	\param   channelOffset   Offset of the channel
@@ -243,25 +119,6 @@ static inline void plp_udma_enqueue(unsigned channelBase, uint32_t l2Addr, unsig
 static inline uint32_t plp_udma_busy(unsigned channelOffset)
 {
 	return (sys_read32(channelOffset + UDMA_CHANNEL_CFG_OFFSET) & UDMA_CHANNEL_CFG_EN);
-}
-
-/** Configures peripheral clock-gating.
- *
-	\param   value    New configuration. There is 1 bit per peripheral, 0 means the peripheral
- is clock-gated. The bit number corresponds to the channel ID of the peripheral.
-	*/
-static inline void plp_udma_cg_set(uint32_t value)
-{
-	sys_write32(value, PUPPY_UDMA_REG_CG + UDMA_CONF_OFFSET + UDMA_CONF_CG_OFFSET);
-}
-
-/** Returns peripheral clock-gating.
- *
-	\return The current clock-gating configuration.
-	*/
-static inline uint32_t plp_udma_cg_get()
-{
-	return sys_read32(PUPPY_UDMA_REG_CG + UDMA_CONF_OFFSET + UDMA_CONF_CG_OFFSET);
 }
 
 /** Configures input events

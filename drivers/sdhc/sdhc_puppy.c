@@ -7,19 +7,23 @@
 
 #define DT_DRV_COMPAT caninos_puppy_sdhc
 
+#define LOG_LEVEL CONFIG_SDHC_LOG_LEVEL
+#include <zephyr/logging/log.h>
+LOG_MODULE_REGISTER(sdhc_puppy);
+
+#include <zephyr/drivers/clock_control.h>
 #include <zephyr/drivers/sdhc.h>
 #include <zephyr/drivers/gpio.h>
-#include <zephyr/logging/log.h>
 #include <soc.h>
 
 #include "sdhc_puppy.h"
-
-LOG_MODULE_REGISTER(sdhc, CONFIG_SDHC_LOG_LEVEL);
 
 struct sdhc_puppy_config {
 	uint32_t base;
 	struct gpio_dt_spec pwr_gpio;
 	struct gpio_dt_spec dat0_gpio;
+	const struct device *clk_dev;
+	clock_control_subsys_t clk_bits;
 };
 
 struct sdhc_puppy_data {
@@ -350,10 +354,10 @@ static int sdhc_puppy_init(const struct device *dev)
 {
 	const struct sdhc_puppy_config *config = dev->config;
 	const struct sdhc_puppy_data *data = dev->data;
-	int ret = 0;
-	uint32_t cg_conf = plp_udma_cg_get();
-
-	plp_udma_cg_set(cg_conf | BIT(UDMA_SDIO_ID));
+	int ret = clock_control_on(config->clk_dev, config->clk_bits);
+	if (ret != 0) {
+		return ret;
+	}
 
 	if (gpio_is_ready_dt(&config->pwr_gpio)) {
 		ret = gpio_pin_configure_dt(&config->pwr_gpio, GPIO_OUTPUT_ACTIVE);
@@ -374,11 +378,14 @@ static int sdhc_puppy_init(const struct device *dev)
 #define PUPPY_SDHC_INIT(idx)                                                                       \
                                                                                                    \
 	const struct sdhc_puppy_config sdhc_puppy_##idx##_config = {                               \
-		.pwr_gpio = GPIO_DT_SPEC_INST_GET_OR(idx, pwr_gpios, {NULL}),                        \
-		.dat0_gpio = GPIO_DT_SPEC_INST_GET(idx, dat0_gpios)};                        \
+		.pwr_gpio = GPIO_DT_SPEC_INST_GET_OR(idx, pwr_gpios, {NULL}),                      \
+		.dat0_gpio = GPIO_DT_SPEC_INST_GET(idx, dat0_gpios),                               \
+		.clk_dev = DEVICE_DT_GET(DT_INST_CLOCKS_CTLR(idx)),                                \
+		.clk_bits = (clock_control_subsys_t) DT_INST_CLOCKS_CELL(idx, bits),               \
+	};                                                                                         \
                                                                                                    \
 	struct sdhc_puppy_data sdhc_puppy_##idx##_data = {                                         \
-		.sdhc = PUPPY_SDHC(idx),															\
+		.sdhc = PUPPY_SDHC(idx),                                                           \
 		.io = {.clock = SD_CLOCK_25MHZ,                                                    \
 		       .timing = SDHC_TIMING_LEGACY,                                               \
 		       .power_mode = SDHC_POWER_ON,                                                \

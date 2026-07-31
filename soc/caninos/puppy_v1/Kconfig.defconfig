@@ -52,13 +52,9 @@ config NUM_IRQS
 	int
 	default 288
 
-config INCLUDE_RESET_VECTOR
+config CLOCK_CONTROL
 	bool
 	default y
-
-config NUM_IRQS
-	int
-	default 32
 
 config MP_MAX_NUM_CPUS
 	default 1

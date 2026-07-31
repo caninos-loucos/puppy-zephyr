@@ -3,6 +3,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/device.h>
 #include <zephyr/drivers/uart.h>
+#include <zephyr/drivers/clock_control.h>
 #include <soc.h>
 #include "uart_puppy.h"
 
@@ -21,8 +22,10 @@ struct uart_puppy_data {
 	volatile bool tx;
 };
 
-struct uart_puppy_config {
+struct uart_puppy_cfg {
 	unsigned int tx_irq, rx_irq;
+	const struct device *clk_dev;
+	clock_control_subsys_t clk_bits;
 };
 
 static int uart_puppy_configure(const struct device *dev, const struct uart_config *cfg)
@@ -135,7 +138,7 @@ static int uart_puppy_fifo_read(const struct device *dev, uint8_t *rx_data, cons
 
 static void uart_puppy_irq_rx_enable(const struct device *dev)
 {
-	const struct uart_puppy_config *config = dev->config;
+	const struct uart_puppy_cfg *config = dev->config;
 	struct uart_puppy_data *data = dev->data;
 	uint32_t key = irq_lock();
 
@@ -161,7 +164,7 @@ static void uart_puppy_irq_rx_enable(const struct device *dev)
 
 static void uart_puppy_irq_rx_disable(const struct device *dev)
 {
-	const struct uart_puppy_config *config = dev->config;
+	const struct uart_puppy_cfg *config = dev->config;
 	struct uart_puppy_data *data = dev->data;
 	uint32_t key = irq_lock();
 
@@ -208,7 +211,7 @@ static int uart_puppy_fifo_fill(const struct device *dev, const uint8_t *tx_data
 
 static void uart_puppy_irq_tx_enable(const struct device *dev)
 {
-	const struct uart_puppy_config *config = dev->config;
+	const struct uart_puppy_cfg *config = dev->config;
 	struct uart_puppy_data *data = dev->data;
 	uint32_t key = irq_lock();
 
@@ -223,7 +226,7 @@ static void uart_puppy_irq_tx_enable(const struct device *dev)
 
 static void uart_puppy_irq_tx_disable(const struct device *dev)
 {
-	const struct uart_puppy_config *config = dev->config;
+	const struct uart_puppy_cfg *config = dev->config;
 	struct uart_puppy_data *data = dev->data;
 	uint32_t key = irq_lock();
 
@@ -274,20 +277,13 @@ static void uart_puppy_irq_callback_set(const struct device *dev, uart_irq_callb
 static int uart_puppy_common_init(const struct device *dev)
 {
 	struct uart_puppy_data *data = dev->data;
-	const struct uart_config *config = &(data->uart_config);
+	const struct uart_puppy_cfg *config = dev->config;
+	int ret = clock_control_on(config->clk_dev, config->clk_bits);
 
-	uint32_t cg_conf = plp_udma_cg_get();
-
-	if (data->id == 0) {
-		plp_udma_cg_set(cg_conf | BIT(UDMA_UART0_ID));
+	if (ret != 0) {
+		return ret;
 	}
-#ifdef CONFIG_SOC_PUPPY_V2
-	else if (data->id == 1) {
-		plp_udma_cg_set(cg_conf | BIT(UDMA_UART1_ID));
-	}
-#endif /* CONFIG_SOC_PUPPY_V2 */
-
-	return uart_puppy_configure(dev, config);
+	return uart_puppy_configure(dev, &(data->uart_config));
 }
 
 static void uart_puppy_tx_irq(void *userdata)
@@ -355,9 +351,12 @@ static DEVICE_API(uart, uart_puppy_driver_api) = {
 			uart_puppy_rx_irq, DEVICE_DT_INST_GET(idx), 0);	     \
 		return 0;						     \
 	}								     \
-	static const struct uart_puppy_config uart_puppy_##idx##_config = {  \
+	static const struct uart_puppy_cfg uart_puppy_##idx##_cfg = {	     \
 		.tx_irq = DT_INST_IRQN_BY_NAME(idx, tx),		     \
 		.rx_irq = DT_INST_IRQN_BY_NAME(idx, rx),		     \
+		.clk_dev = DEVICE_DT_GET(DT_INST_CLOCKS_CTLR(idx)),	     \
+		.clk_bits = (clock_control_subsys_t)			     \
+			  DT_INST_CLOCKS_CELL(idx, bits),		     \
 	};								     \
 	static struct uart_puppy_data uart_puppy_##idx##_data = {                                  \
 		.base = DT_INST_REG_ADDR(idx),                                                     \
@@ -373,7 +372,7 @@ static DEVICE_API(uart, uart_puppy_driver_api) = {
 			.parity = DT_INST_ENUM_IDX_OR(idx, parity, UART_CFG_PARITY_NONE),          \
 		}};                                                                                \
                                                                                                    \
-	DEVICE_DT_INST_DEFINE(idx, uart_puppy_##idx##_init, NULL, &uart_puppy_##idx##_data, &uart_puppy_##idx##_config,          \
+	DEVICE_DT_INST_DEFINE(idx, uart_puppy_##idx##_init, NULL, &uart_puppy_##idx##_data, &uart_puppy_##idx##_cfg,          \
 			      PRE_KERNEL_2, CONFIG_SERIAL_INIT_PRIORITY, &uart_puppy_driver_api);
 
 DT_INST_FOREACH_STATUS_OKAY(PUPPY_UART_INIT);

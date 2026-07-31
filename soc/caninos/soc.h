@@ -7,8 +7,6 @@
 
 #include <zephyr/devicetree.h>
 
-#define PUPPY_UDMA_REG_CG 0x1A102000
-
 #define PUPPY_IRQ_BASE_ADDR DT_REG_ADDR(DT_NODELABEL(intc))
 
 /* PAD configuration */
