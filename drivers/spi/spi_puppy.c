@@ -11,6 +11,7 @@
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(spi_puppy);
 
+#include <zephyr/drivers/clock_control.h>
 #include <zephyr/sys/util.h>
 #include <string.h>
 #include "spi_puppy.h"
@@ -19,18 +20,22 @@ LOG_MODULE_REGISTER(spi_puppy);
 #define SPI_PUPPY_MAX_BUFFER_SIZE (512)
 
 struct spi_puppy_data {
-    struct spi_context ctx;
-    uint32_t base;
-    uint32_t id;
-    uint32_t slave;
+	struct spi_context ctx;
 
-    uint32_t cpol, cpha, clkdiv;
-    uint32_t quad, lsb;
+	uint32_t base;
+	uint32_t id;
+	uint32_t slave;
 
-    uint8_t txbuf[SPI_PUPPY_MAX_BUFFER_SIZE];
-    uint8_t rxbuf[SPI_PUPPY_MAX_BUFFER_SIZE];
-    bool first;
-    bool hw_cs;
+	uint32_t cpol, cpha, clkdiv;
+	uint32_t quad, lsb;
+
+	uint8_t txbuf[SPI_PUPPY_MAX_BUFFER_SIZE];
+	uint8_t rxbuf[SPI_PUPPY_MAX_BUFFER_SIZE];
+	bool first;
+	bool hw_cs;
+
+	const struct device *clk_dev;
+	clock_control_subsys_t clk_bits;
 };
 
 static bool spi_puppy_xfer(const struct device *dev)
@@ -219,27 +224,24 @@ static DEVICE_API(spi, spi_puppy_driver_api) = {
 
 static int spi_puppy_init(const struct device *dev)
 {
-    struct spi_puppy_data *data = (struct spi_puppy_data *)dev->data;
-    int ret;
+	struct spi_puppy_data *data = (struct spi_puppy_data *)dev->data;
+	int ret;
 
-    memset(data->txbuf, 0, SPI_PUPPY_MAX_BUFFER_SIZE);
+	memset(data->txbuf, 0, SPI_PUPPY_MAX_BUFFER_SIZE);
 
-    if (data->id >= UDMA_SPI_PERIPH_COUNT) {
-        LOG_ERR("Invalid spi_id: %d", data->id);
-        return -EINVAL;
-    }
+	ret = clock_control_on(data->clk_dev, data->clk_bits);
+	if (ret != 0) {
+		return ret;
+	}
 
-    puppy_udma_clock_enable(PUPPY_SPI_ID_TO_UDMA_ID[data->id]);
-
-    if ((ret = spi_context_cs_configure_all(&data->ctx)) < 0)
-    {
-        puppy_udma_clock_disable(PUPPY_SPI_ID_TO_UDMA_ID[data->id]);
-        LOG_ERR("Failed to configure CS pins: %d", ret);
-        return ret;
-    }
-
-    spi_context_unlock_unconditionally(&data->ctx);
-    return 0;
+	if ((ret = spi_context_cs_configure_all(&data->ctx)) < 0)
+	{
+		clock_control_off(data->clk_dev, data->clk_bits);
+		LOG_ERR("Failed to configure CS pins: %d", ret);
+		return ret;
+	}
+	spi_context_unlock_unconditionally(&data->ctx);
+	return 0;
 }
 
 #define SPI_PUPPY_INIT(idx)                                      \
@@ -249,6 +251,8 @@ static int spi_puppy_init(const struct device *dev)
         SPI_CONTEXT_CS_GPIOS_INITIALIZE(DT_DRV_INST(idx), ctx)   \
         .base = DT_INST_REG_ADDR(idx),                           \
         .id = DT_INST_PROP(idx, spi_id),                         \
+        .clk_dev = DEVICE_DT_GET(DT_INST_CLOCKS_CTLR(idx)),      \
+        .clk_bits = (clock_control_subsys_t) DT_INST_CLOCKS_CELL(idx, bits), \
     };                                                           \
     SPI_DEVICE_DT_INST_DEFINE(idx,                               \
         spi_puppy_init, NULL, &spi_puppy_##idx##_data, NULL,     \

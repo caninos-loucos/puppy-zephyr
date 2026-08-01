@@ -101,3 +101,11 @@
 	status = "okay";
 	clock-frequency = <100000>;
 };
+
+&sdhc {
+		mmc {
+			compatible = "zephyr,sdmmc-disk";
+			disk-name = "SD";
+			status = "okay";
+	};
+};

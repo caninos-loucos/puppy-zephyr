@@ -1,0 +1,12 @@
+# Copyright (c) 2026 Edgar Bernardi Righi <edgar.righi@lsitec.org.br>
+# SPDX-License-Identifier: Apache-2.0
+
+config PUPPY_EVENT_INTC
+	bool "Puppy Event Interrupt Controller"
+	default y
+	select MULTI_LEVEL_INTERRUPTS
+	select 2ND_LEVEL_INTERRUPTS
+	depends on DT_HAS_CANINOS_PUPPY_EVTC_ENABLED
+	help
+	  Puppy Event Interrupt Controller provides support for device events.
+

@@ -1,0 +1,9 @@
+# Copyright (c) 2026 Edgar Bernardi Righi
+#
+# SPDX-License-Identifier: Apache-2.0
+
+config CLOCK_CONTROL_PUPPY
+	bool "Puppy UDMA clock control"
+	default y
+	depends on DT_HAS_CANINOS_PUPPY_UDMA_CLOCK_ENABLED
+

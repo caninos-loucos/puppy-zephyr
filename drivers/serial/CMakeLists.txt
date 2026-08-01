@@ -121,6 +121,13 @@ if (CONFIG_UART_NRFX_UARTE)
   endif()
 endif()
 
+if(CONFIG_UART_PUPPY AND CONFIG_EARLY_CONSOLE)
+  message(FATAL_ERROR
+    "CONFIG_UART_PUPPY cannot be used with CONFIG_EARLY_CONSOLE because "
+    "the driver initializes at PRE_KERNEL_2."
+  )
+endif()
+
 if(CONFIG_UART_NATIVE_PTY)
   zephyr_library_compile_definitions(NO_POSIX_CHEATS)
   zephyr_library_sources(uart_native_pty.c)
