@@ -25,23 +25,27 @@ struct puppy_timer_t {
 	uint32_t START_HI;
 	uint32_t RESET_LO;
 	uint32_t RESET_HI;
-} __packed;
+};
 
 #define CYC_PER_TICK \
 	(sys_clock_hw_cycles_per_sec() / CONFIG_SYS_CLOCK_TICKS_PER_SEC)
 
 static volatile uint64_t cycle_count = 0ULL;
 
-#define PUPPY_TIMER ((volatile struct puppy_timer_t *)(DT_INST_REG_ADDR(0)))
+static volatile struct puppy_timer_t * const PUPPY_TIMER =
+	(volatile struct puppy_timer_t *)DT_INST_REG_ADDR(0);
 
 uint64_t sys_clock_cycle_get_64(void)
 {
-	return cycle_count + (uint64_t)(PUPPY_TIMER->CNT_LO);
+	unsigned int key = irq_lock();
+	uint64_t cycles = cycle_count + PUPPY_TIMER->CNT_LO;
+	irq_unlock(key);
+	return cycles;
 }
 
 uint32_t sys_clock_cycle_get_32(void)
 {
-	return (uint32_t)(sys_clock_cycle_get_64());
+	return (uint32_t)sys_clock_cycle_get_64();
 }
 
 uint32_t sys_clock_elapsed(void)
