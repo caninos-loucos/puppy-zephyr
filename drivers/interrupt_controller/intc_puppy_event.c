@@ -19,7 +19,7 @@
 struct puppy_evtc_regs {
 	uint32_t SW_EVENT;               // BASEADDR + 0x0
 	uint32_t FC_MASK[FC_MASK_COUNT]; // BASEADDR + 0x4 + (n * 0x4)
-} __packed;
+};
 
 struct puppy_evtc_config {
 	volatile struct puppy_evtc_regs *regs;
@@ -29,11 +29,11 @@ struct puppy_evtc_config {
 static void puppy_evtc_irq_enable(const struct device *dev, uint32_t irq)
 {
 	const struct puppy_evtc_config *config = dev->config;
-	int bit = irq_from_level_2(irq) % 32;
-	int off = irq_from_level_2(irq) / 32;
+	uint32_t l2 = irq_from_level_2(irq);
+	uint32_t bit = l2 & 31U;
+	uint32_t off = l2 >> 5;
 
-	if (off < FC_MASK_COUNT)
-	{
+	if (off < FC_MASK_COUNT) {
 		unsigned int key = irq_lock();
 		config->regs->FC_MASK[off] &= ~BIT(bit);
 		irq_unlock(key);
@@ -43,11 +43,11 @@ static void puppy_evtc_irq_enable(const struct device *dev, uint32_t irq)
 static void puppy_evtc_irq_disable(const struct device *dev, uint32_t irq)
 {
 	const struct puppy_evtc_config *config = dev->config;
-	int bit = irq_from_level_2(irq) % 32;
-	int off = irq_from_level_2(irq) / 32;
+	uint32_t l2 = irq_from_level_2(irq);
+	uint32_t bit = l2 & 31U;
+	uint32_t off = l2 >> 5;
 
-	if (off < FC_MASK_COUNT)
-	{
+	if (off < FC_MASK_COUNT) {
 		unsigned int key = irq_lock();
 		config->regs->FC_MASK[off] |= BIT(bit);
 		irq_unlock(key);
@@ -57,32 +57,26 @@ static void puppy_evtc_irq_disable(const struct device *dev, uint32_t irq)
 static uint32_t puppy_evtc_get_state(const struct device *dev)
 {
 	const struct puppy_evtc_config *config = dev->config;
-	unsigned int key = irq_lock();
-	int off, ret = 0;
+	uint32_t off;
 
 	for (off = 0; off < FC_MASK_COUNT; off++) {
-		if (config->regs->FC_MASK[off] != 0xffffffff) {
-			ret = 1;
+		if (config->regs->FC_MASK[off] != UINT32_MAX) {
+			return 1;
 		}
 	}
-	irq_unlock(key);
-	return ret;
+	return 0;
 }
 
 static int puppy_evtc_get_line_state(const struct device *dev,
 				     unsigned int irq)
 {
 	const struct puppy_evtc_config *config = dev->config;
-	int bit = irq_from_level_2(irq) % 32UL;
-	int off = irq_from_level_2(irq) / 32UL;
-	int ret = 0;
+	uint32_t l2 = irq_from_level_2(irq);
+	uint32_t bit = l2 & 31U;
+	uint32_t off = l2 >> 5;
 
-	unsigned int key = irq_lock();
-	if (off < FC_MASK_COUNT && !(config->regs->FC_MASK[off] & BIT(bit))) {
-		ret = 1;
-	}
-	irq_unlock(key);
-	return ret;
+	return (off < FC_MASK_COUNT) && 
+	       !(config->regs->FC_MASK[off] & BIT(bit));
 }
 
 static void puppy_evtc_isr(const void *arg)
@@ -101,10 +95,10 @@ static void puppy_evtc_isr(const void *arg)
 static int puppy_evtc_init(const struct device *dev)
 {
 	const struct puppy_evtc_config *config = dev->config;
-	size_t off;
-	
+	uint32_t off;
+
 	for (off = 0; off < FC_MASK_COUNT; off++) {
-		config->regs->FC_MASK[off] = 0xffffffff;
+		config->regs->FC_MASK[off] = UINT32_MAX;
 	}
 
 	IRQ_CONNECT(DT_INST_IRQN(0), 0, puppy_evtc_isr,
