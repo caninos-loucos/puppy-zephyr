@@ -6,6 +6,7 @@
 #define DT_DRV_COMPAT pulp_udma_filter
 
 #include <zephyr/drivers/hwaccel.h>
+#include <zephyr/drivers/clock_control.h>
 #include <soc.h>
 
 #include "pulp_udma_filter.h"
@@ -36,10 +37,14 @@ struct pulp_udma_filter {
 
 struct pulp_udma_filter_config {
 	struct accel_driver_config hw_config;
+	const struct device *clk_dev;
+	clock_control_subsys_t clk_bits;
 };
 
 struct pulp_udma_filter_data {
 	struct accel_driver_data hw_data;
+	hwaccel_irq_callback_user_data_t callback;
+	void *user_data;
 	volatile struct pulp_udma_filter *filt;
 };
 
@@ -210,8 +215,34 @@ static int pulp_udma_filter_configure_ops(const struct device *dev, accel_hw_ops
 	return 0;
 }
 
-static int pulp_udma_filter_init(const struct device *dev)
+static int pulp_udma_filter_irq_callback_set(const struct device *dev,
+					      hwaccel_irq_callback_user_data_t cb, void *user_data)
 {
+	struct pulp_udma_filter_data *data = dev->data;
+
+	data->callback = cb;
+	data->user_data = user_data;
+
+	return 0;
+}
+
+static void pulp_udma_filter_irq(void *userdata)
+{
+	const struct device *dev = (const struct device *)userdata;
+	struct pulp_udma_filter_data *data = dev->data;
+
+	if (data->callback != NULL) {
+		data->callback(dev, data->user_data);
+	}
+}
+
+static int pulp_udma_common_filter_init(const struct device *dev)
+{
+	const struct pulp_udma_filter_config *config = dev->config;
+	int ret = clock_control_on(config->clk_dev, config->clk_bits);
+	if (ret != 0) {
+		return ret;
+	}
 	return 0;
 }
 
@@ -219,11 +250,23 @@ static struct accel_driver_api pulp_udma_filter_accel_api = {
 	.query_hw_caps = pulp_udma_filter_query_hw_caps,
 	.configure_ops = pulp_udma_filter_configure_ops,
 	.set_buffers = pulp_udma_filter_set_buffers,
+	.set_callback = pulp_udma_filter_irq_callback_set,
 	.start = pulp_udma_filter_start,
 	.abort = pulp_udma_filter_abort,
 };
 
 #define PULP_FILTER_INIT(idx)                                                                      \
+	static int pulp_udma_filter_##idx##_init(const struct device *dev)                         \
+	{                                                                                          \
+		int ret = pulp_udma_common_filter_init(dev);                                       \
+		if (ret != 0) {                                                                    \
+			return ret;                                                                \
+		}                                                                                  \
+		IRQ_CONNECT(DT_INST_IRQN(idx), 0, pulp_udma_filter_irq, DEVICE_DT_INST_GET(idx),   \
+			    0);                                                                    \
+		irq_enable(DT_INST_IRQN(idx));                                                     \
+		return 0;                                                                          \
+	}                                                                                          \
 	static struct pulp_udma_filter_data pulp_udma_filter_##idx##_data = {                      \
 		.hw_data =                                                                         \
 			{                                                                          \
@@ -249,10 +292,12 @@ static struct accel_driver_api pulp_udma_filter_accel_api = {
 						.max_chan_dimension = 3,                           \
 					},                                                         \
 			},                                                                         \
-                                                                                                   \
+		.clk_dev = DEVICE_DT_GET(DT_INST_CLOCKS_CTLR(idx)),                                \
+		.clk_bits = (clock_control_subsys_t)DT_INST_CLOCKS_CELL(idx, bits),                \
 	};                                                                                         \
-	DEVICE_DT_INST_DEFINE(idx, &pulp_udma_filter_init, NULL, &pulp_udma_filter_##idx##_data,   \
-			      &pulp_udma_filter_##idx##_config, POST_KERNEL,                       \
-			      CONFIG_HWACCEL_INIT_PRIORITY, &pulp_udma_filter_accel_api);
+	DEVICE_DT_INST_DEFINE(idx, &pulp_udma_filter_##idx##_init, NULL,                           \
+			      &pulp_udma_filter_##idx##_data, &pulp_udma_filter_##idx##_config,    \
+			      POST_KERNEL, CONFIG_HWACCEL_INIT_PRIORITY,                           \
+			      &pulp_udma_filter_accel_api);
 
 DT_INST_FOREACH_STATUS_OKAY(PULP_FILTER_INIT)
