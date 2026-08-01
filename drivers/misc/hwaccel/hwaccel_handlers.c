@@ -6,10 +6,10 @@
 #include <zephyr/drivers/hwaccel.h>
 #include <zephyr/internal/syscall_handler.h>
 
-static inline int z_vrfy_accel_set_callback(const struct device *dev, struct accel_callback *cb)
+static inline int z_vrfy_accel_set_callback(const struct device *dev, hwaccel_irq_callback_user_data_t cb, void *user_data)
 {
 	K_OOPS(K_SYSCALL_DRIVER_HWACCEL(dev, set_callback));
-	return z_impl_accel_set_callback(dev);
+	return z_impl_accel_set_callback(dev, cb, user_data);
 }
 #include <zephyr/syscalls/accel_set_callback_mrsh.c>
 

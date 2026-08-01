@@ -16,6 +16,7 @@
 #include <errno.h>
 #include <zephyr/types.h>
 #include <zephyr/device.h>
+#include <zephyr/kernel.h>
 #include <zephyr/sys/util.h>
 
 #ifdef __cplusplus
@@ -80,12 +81,22 @@ struct accel_driver_config {
     const accel_hw_caps_t caps; //? if the config is const then is this const
 };
 
-struct accel_callback;
+/**
+ * @brief Define the application callback function signature for
+ * hwaccel_irq_callback_user_data_set() function.
+ *
+ * @param dev hwaccel device instance.
+ * @param user_data Arbitrary user data.
+ */
+typedef void (*hwaccel_irq_callback_user_data_t)(const struct device *dev,
+					      void *user_data);
+
 
 /* Expected to be the in every driver's data object */
 struct accel_driver_data {
     uint32_t current_config;
-    struct accel_callback *cb;
+    hwaccel_irq_callback_user_data_t *cb;
+	void *user_data;
 };
 
 
@@ -96,7 +107,7 @@ __subsystem struct accel_driver_api {
 //#endif
     int (*configure_ops)(const struct device *dev, accel_hw_ops_t* ops_series, int nops);
     int (*set_buffers)(const struct device *dev, accel_buffer_t** in_bufs, int nbufs, accel_buffer_t* out_buf);
-    int (*set_callback)(const struct device *dev, struct accel_callback *cb);
+    int (*set_callback)(const struct device *dev, hwaccel_irq_callback_user_data_t cb, void *user_data);
     int (*start)(const struct device *dev);
     int (*abort)(const struct device *dev);
 };
@@ -105,13 +116,14 @@ __subsystem struct accel_driver_api {
  * @brief Set Callback
  * @param dev Pointer to accelerator device
  * @param cb callback to completion of operation
+ * @param user_data arbitrary pointer
  *
  * @retval 0 If Successful
  * @retval -ENOSYS if not implemented
   */
-__syscall int accel_set_callback(const struct device* dev, struct accel_callback *cb);
+__syscall int accel_set_callback(const struct device* dev, hwaccel_irq_callback_user_data_t cb, void *user_data);
 
-static inline int z_impl_accel_set_callback(const struct device* dev, struct accel_callback *cb) 
+static inline int z_impl_accel_set_callback(const struct device* dev, hwaccel_irq_callback_user_data_t cb, void *user_data) 
 {
     struct accel_driver_data *data = (struct accel_driver_data *)dev->data;
     const struct accel_driver_api *api = (const struct accel_driver_api *)dev->api;
@@ -121,11 +133,7 @@ static inline int z_impl_accel_set_callback(const struct device* dev, struct acc
         return -ENOSYS;
     }
 
-    ret = api->set_callback(dev, cb);
-    if(ret)
-        return ret;
-
-    data->cb = cb;
+    ret = api->set_callback(dev, cb, user_data);
 
     return ret;
 }
