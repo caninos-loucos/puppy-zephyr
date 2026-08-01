@@ -11,5 +11,4 @@ config UART_PUPPY
 	select UART_ASYNC_API
 	help
 	  Enable driver for the Puppy UART controller.
-
 	  Says n if not sure.
