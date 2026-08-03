@@ -97,6 +97,7 @@
         compatible = "pulp,udma-filter";
         reg = <0x1a102500 0x80>;
 		clocks = <&udma_clk PUPPY_UDMA_CLK_FILTER>;
+		interrupt-parent = <&evtc>;
 		interrupts = <PUPPY_EVTC_FILTER_ACT_IRQ>;
     };
 };

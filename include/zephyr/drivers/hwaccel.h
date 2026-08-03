@@ -60,8 +60,8 @@ typedef enum {
 typedef struct {
     uint32_t op_caps;
     uint32_t fmt_caps;
-    int max_input_buffers;
-    int max_chan_dimension;
+    uint32_t max_input_buffers;
+    uint32_t max_chan_dimension;
 } accel_hw_caps_t;
 
 // fmt is one from accel_buf_fmt
@@ -73,7 +73,7 @@ typedef struct {
     accel_buffer_fmt_t fmt;
     int* len;
     int dim;
-    void* buf;
+    volatile void* buf;
 } accel_buffer_t;
 
 /* Expected to be the in every driver's config object */
@@ -101,7 +101,7 @@ struct accel_driver_data {
 
 
 __subsystem struct accel_driver_api {
-    int (*query_hw_caps)(const struct device *dev, const accel_hw_caps_t *caps);
+    int (*query_hw_caps)(const struct device *dev, accel_hw_caps_t *caps);
 //#ifdef RTIO
 //    int (*iodev_submit)(const struct device *dev, *iodev_sqe);
 //#endif
@@ -195,9 +195,9 @@ static inline int z_impl_accel_abort(const struct device* dev)
  * @retval -ENOSYS if not implemented
  * 
  */
-__syscall int accel_query_hw_caps(const struct device *dev, const accel_hw_caps_t *caps);
+__syscall int accel_query_hw_caps(const struct device *dev, accel_hw_caps_t *caps);
 
-static inline int z_impl_accel_query_hw_caps(const struct device *dev, const accel_hw_caps_t *caps) {
+static inline int z_impl_accel_query_hw_caps(const struct device *dev, accel_hw_caps_t *caps) {
     const struct accel_driver_api *api = (const struct accel_driver_api *)dev->api;
     int ret;
 

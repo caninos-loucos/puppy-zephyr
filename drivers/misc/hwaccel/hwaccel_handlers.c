@@ -27,13 +27,14 @@ static inline int z_vrfy_accel_abort(const struct device *dev)
 }
 #include <zephyr/syscalls/accel_abort_mrsh.c>
 
-static inline int z_vrfy_accel_query_hw_caps(const struct device *dev, const accel_hw_caps_t *caps)
+static inline int z_vrfy_accel_query_hw_caps(const struct device *dev, accel_hw_caps_t *caps)
 {
 	K_OOPS(K_SYSCALL_DRIVER_HWACCEL(dev, query_hw_caps));
-	K_OOPS(K_SYSCALL_MEMORY_READ(caps, sizeof(struct accel_hw_caps_t)));
+	K_OOPS(K_SYSCALL_MEMORY_READ(caps, sizeof(accel_hw_caps_t)));
 	K_OOPS(K_SYSCALL_MEMORY_READ(caps->hw_caps, sizeof(uint32_t)));
 	K_OOPS(K_SYSCALL_MEMORY_READ(caps->fmt_caps, sizeof(uint32_t)));
-	K_OOPS(K_SYSCALL_MEMORY_READ(caps->max_input_channels, sizeof(int)));
+	K_OOPS(K_SYSCALL_MEMORY_READ(caps->max_input_buffers, sizeof(uint32_t)));
+	K_OOPS(K_SYSCALL_MEMORY_READ(caps->max_chan_dimension, sizeof(uint32_t)));
 	return z_impl_accel_query_hw_caps(dev, caps);
 }
 #include <zephyr/syscalls/accel_query_hw_caps_mrsh.c>

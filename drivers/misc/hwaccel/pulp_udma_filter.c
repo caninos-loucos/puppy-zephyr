@@ -12,12 +12,12 @@
 #include "pulp_udma_filter.h"
 
 struct pulp_udma_filter_chan {
-	uint32_t acc;
+	uint32_t add;
 	uint32_t cfg;
 	uint32_t len_x;
 	uint32_t len_y;
 	uint32_t len_z;
-} __packed;
+};
 
 struct pulp_udma_filter {
 	struct pulp_udma_filter_chan tx0;
@@ -33,7 +33,7 @@ struct pulp_udma_filter {
 	uint32_t filt_start;
 	uint32_t filt_cmd;
 	uint32_t status;
-} __packed;
+};
 
 struct pulp_udma_filter_config {
 	struct accel_driver_config hw_config;
@@ -49,47 +49,25 @@ struct pulp_udma_filter_data {
 };
 
 #define PULP_FILTER(x) (volatile struct pulp_udma_filter *)(DT_INST_REG_ADDR(x))
-/*
-Arithmetic Unit mode:
--4’b0000: AU_MODE_AxB
--4’b0001: AU_MODE_AxB+REG0
--4’b0010: AU_MODE_AxB accumulation
--4’b0011: AU_MODE_AxA
--4’b0100: AU_MODE_AxA+B
--4’b0101: AU_MODE_AxA-B
--4’b0110: AU_MODE_AxA accumulation
--4’b0111: AU_MODE_AxA+REG0
--4’b1000: AU_MODE_AxREG1
--4’b1001: AU_MODE_AxREG1+B
--4’b1010: AU_MODE_AxREG1-B
--4’b1011: AU_MODE_AxREG1+REG0
--4’b1100: AU_MODE_AxREG1 accumulation
--4’b1101: AU_MODE_A+B
--4’b1110: AU_MODE_A-B
--4’b1111: AU_MODE_A+REG0
 
- FILTER component manages the following features:
-- Thresholding
-- Binarization
-- Memory copy
-- Transpose
-- Convolution 1D
-- Vector operation]
-
-how to do them? idk
-*/
-
-static int pulp_udma_filter_query_hw_caps(const struct device *dev, const accel_hw_caps_t *caps)
+static int pulp_udma_filter_query_hw_caps(const struct device *dev, accel_hw_caps_t *caps)
 {
 	const struct pulp_udma_filter_config *config =
 		(const struct pulp_udma_filter_config *)dev->config;
-	caps = &config->hw_config.caps;
+
+	printk("Caps mask: \n\n\tOP: 0x%x\n\n\tFMT: 0x%x\n\n\tCHAN_DIM: %d, N_CHANS: "
+	       "%d\n\n",
+	       config->hw_config.caps.op_caps, config->hw_config.caps.fmt_caps,
+	       config->hw_config.caps.max_chan_dimension, config->hw_config.caps.max_input_buffers);
+
+	*caps = config->hw_config.caps;
 	return 0;
 }
 
 static int pulp_udma_filter_start(const struct device *dev)
 {
 	struct pulp_udma_filter_data *data = (struct pulp_udma_filter_data *)dev->data;
+	printk("Filter at 0x%x Start\n", (uint32_t)data->filt);
 	data->filt->filt_start = 1;
 	return 0;
 }
@@ -97,9 +75,7 @@ static int pulp_udma_filter_start(const struct device *dev)
 static int pulp_udma_filter_abort(const struct device *dev)
 {
 	struct pulp_udma_filter_data *data = (struct pulp_udma_filter_data *)dev->data;
-	plp_udma_clr((uint32_t)&data->filt->tx0);
-	plp_udma_clr((uint32_t)&data->filt->tx1);
-	plp_udma_clr((uint32_t)&data->filt->rx);
+	printk("Filter Abort\n");
 	return 0;
 }
 
@@ -124,22 +100,29 @@ void calc_bytes(int *bytes, int *block_size_bytes, accel_buffer_t *buf,
 		break;
 	}
 
+	printk("Block Size Bytes = %d\n", *(block_size_bytes));
+
 	for (int i = 0; i < buf->dim; i++) {
-		*(bytes) += buf->len[i] * *(block_size_bytes);
 		switch (i) {
 		case (0):
 			chan->len_x = buf->len[i];
-			break;
+			printk("Chan X len is %d blocks\n", chan->len_x);
+			break; // does this break leave the for?
 		case (1):
 			chan->len_y = buf->len[i];
+			printk("Chan Y len is %d blocks\n", chan->len_y);
 			break;
 		case (2):
 			chan->len_z = buf->len[i];
+			printk("Chan Z len is %d blocks\n", chan->len_z);
 			break;
 		default:
 			break;
 		}
+		*(bytes) += buf->len[i] * *(block_size_bytes);
 	}
+
+	printk("Transfer size is %d bytes\n\n", *(bytes));
 }
 
 static int pulp_udma_filter_set_buffers(const struct device *dev, accel_buffer_t **in_bufs,
@@ -148,9 +131,9 @@ static int pulp_udma_filter_set_buffers(const struct device *dev, accel_buffer_t
 	struct pulp_udma_filter_data *data = (struct pulp_udma_filter_data *)dev->data;
 	int bytes, block_size_bytes;
 
+	printk("Transferring buffers from addresses: \n\tA: 0x%x\tB: 0x%x, OUT: 0x%x\n\n",in_bufs[0]->buf, in_bufs[1]->buf, out_buf->buf);
+
 	calc_bytes(&bytes, &block_size_bytes, in_bufs[0], &data->filt->tx0);
-	plp_udma_enqueue((uint32_t)&data->filt->tx0, (uint32_t)in_bufs[0]->buf, bytes,
-			 block_size_bytes >> 1);
 
 	switch (in_bufs[0]->fmt) {
 	case (FMT_UINT32):
@@ -166,29 +149,33 @@ static int pulp_udma_filter_set_buffers(const struct device *dev, accel_buffer_t
 	default:
 		break;
 	}
-
 	// add different dim support
 	data->filt->tx0.cfg = TX_CFG(TX_MODE_LINEAR, block_size_bytes >> 1);
+	data->filt->tx0.add = (uint32_t)in_bufs[0]->buf;
 
 	if (nbufs == 2) {
 		if (in_bufs[1]->fmt != in_bufs[0]->fmt) {
+			printk("Invalid B Buffer Format (A Format is %d, B is %d)\n",
+			       in_bufs[0]->fmt, in_bufs[1]->fmt);
 			return -EINVAL;
 		}
 
 		calc_bytes(&bytes, &block_size_bytes, in_bufs[1], &data->filt->tx1);
-		plp_udma_enqueue((uint32_t)&data->filt->tx1, (uint32_t)in_bufs[1]->buf, bytes,
-				 block_size_bytes >> 1);
 		data->filt->tx1.cfg = TX_CFG(TX_MODE_LINEAR, block_size_bytes >> 1);
+		data->filt->tx1.add = (uint32_t)in_bufs[1]->buf;
 	}
 
 	if (out_buf->fmt != in_bufs[0]->fmt) {
+		printk("Invalid OUT Buffer Format (A Format is %d, OUT is %d)\n", in_bufs[0]->fmt,
+		       out_buf->fmt);
 		return -EINVAL;
 	}
 
 	calc_bytes(&bytes, &block_size_bytes, out_buf, &data->filt->rx);
-	plp_udma_enqueue((uint32_t)&data->filt->rx, (uint32_t)out_buf->buf, bytes,
-			 block_size_bytes >> 1);
 	data->filt->rx.cfg = RX_CFG(RX_MODE_LINEAR, block_size_bytes >> 1);
+	data->filt->rx.add = (uint32_t)out_buf->buf;
+
+	printk("Registers: \n\tTX0: 0x%x\tTX1: 0x%x, RX: 0x%x\n\n", data->filt->tx0.add, data->filt->tx1.add, data->filt->rx.add);
 
 	return 0;
 }
@@ -198,6 +185,7 @@ static int pulp_udma_filter_configure_ops(const struct device *dev, accel_hw_ops
 {
 	struct pulp_udma_filter_data *data = (struct pulp_udma_filter_data *)dev->data;
 
+	// do something to reset
 	switch (ops_series[0]) {
 	case (HW_OP_SUM):
 		data->filt->au_cfg |= AU_CFG(0, AU_MODE_A_PLUS_B, 0, 0);
@@ -212,11 +200,13 @@ static int pulp_udma_filter_configure_ops(const struct device *dev, accel_hw_ops
 		return -ENOTSUP;
 	}
 
+	printk("Config AU with OP %d\n", ops_series[0]);
+
 	return 0;
 }
 
 static int pulp_udma_filter_irq_callback_set(const struct device *dev,
-					      hwaccel_irq_callback_user_data_t cb, void *user_data)
+					     hwaccel_irq_callback_user_data_t cb, void *user_data)
 {
 	struct pulp_udma_filter_data *data = dev->data;
 
