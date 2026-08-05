@@ -1,14 +1,15 @@
 #define DT_DRV_COMPAT caninos_puppy_i2c
 
-#define LOG_LEVEL CONFIG_I2C_LOG_LEVEL
-#include <zephyr/logging/log.h>
-LOG_MODULE_REGISTER(sdhc_puppy);
-
 #include <zephyr/kernel.h>
 #include <zephyr/device.h>
 #include <zephyr/drivers/clock_control.h>
 #include <zephyr/drivers/i2c.h>
 #include <soc.h>
+
+#define LOG_LEVEL CONFIG_I2C_LOG_LEVEL
+#include <zephyr/logging/log.h>
+LOG_MODULE_REGISTER(i2c_puppy);
+
 #include "i2c_puppy.h"
 
 struct i2c_puppy_data {
@@ -47,21 +48,16 @@ static int i2c_puppy_send_addr(const struct device *dev, uint16_t addr, uint16_t
 
 	cmd_buf[index++] = I2C_CMD_CFG | data->clock_div;
 	cmd_buf[index++] = I2C_CMD_START;
-	cmd_buf[index++] = I2C_CMD_WR;
+	cmd_buf[index++] = I2C_CMD_WRB | i2c_data;
 	cmd_buf[index++] = I2C_CMD_EOT;
 
-	while (!plp_udma_canEnqueue(base + UDMA_CHANNEL_TX_OFFSET))
+	while (!plp_udma_canEnqueue(base + UDMA_CHANNEL_CMD_OFFSET))
 		;
 
-	k_usleep(100);
 	plp_udma_enqueue(base + UDMA_CHANNEL_CMD_OFFSET, (uint32_t)cmd_buf, index * 4,
 			 UDMA_CHANNEL_CFG_SIZE_32);
-	k_usleep(50);
-	plp_udma_enqueue(base + UDMA_CHANNEL_TX_OFFSET, (uint32_t)&i2c_data, 1,
-			 UDMA_CHANNEL_CFG_SIZE_8);
 
-	while (plp_udma_busy(base + UDMA_CHANNEL_TX_OFFSET) ||
-	       plp_udma_busy(base + UDMA_CHANNEL_CMD_OFFSET))
+	while (plp_udma_busy(base + UDMA_CHANNEL_CMD_OFFSET))
 		;
 
 	return 0;
@@ -76,13 +72,11 @@ static int i2c_puppy_write_msg(const struct device *dev, struct i2c_msg *msg, ui
 	int index = 0;
 	i2c_puppy_send_addr(dev, addr, I2C_W_FLAG);
 
-	cmd_buf[index] = I2C_CMD_CFG | data->clock_div;
+	cmd_buf[index++] = I2C_CMD_CFG | data->clock_div;
 
-	if (msg->len > 1) {
-		cmd_buf[index++] = I2C_CMD_RPT | msg->len;
+	for (int i = 0; i < msg->len; i++) {
+		cmd_buf[index++] = I2C_CMD_WRB | msg->buf[i];
 	}
-
-	cmd_buf[index++] = I2C_CMD_WR;
 
 	if (msg->flags & I2C_MSG_STOP) {
 		cmd_buf[index++] = I2C_CMD_STOP;
@@ -90,15 +84,13 @@ static int i2c_puppy_write_msg(const struct device *dev, struct i2c_msg *msg, ui
 
 	cmd_buf[index++] = I2C_CMD_EOT;
 
+	while (!plp_udma_canEnqueue(base + UDMA_CHANNEL_CMD_OFFSET))
+		;
+
 	plp_udma_enqueue(base + UDMA_CHANNEL_CMD_OFFSET, (uint32_t)cmd_buf, index * 4,
 			 UDMA_CHANNEL_CFG_SIZE_32);
-	k_usleep(50);
-	plp_udma_enqueue(base + UDMA_CHANNEL_TX_OFFSET, (uint32_t)msg->buf, msg->len,
-			 UDMA_CHANNEL_CFG_SIZE_8);
-
 #if CONFIG_I2C_W_BLOCKING
-	while (plp_udma_busy(base + UDMA_CHANNEL_TX_OFFSET) ||
-	       plp_udma_busy(base + UDMA_CHANNEL_CMD_OFFSET))
+	while (plp_udma_busy(base + UDMA_CHANNEL_CMD_OFFSET))
 		;
 #endif
 
@@ -108,7 +100,7 @@ static int i2c_puppy_write_msg(const struct device *dev, struct i2c_msg *msg, ui
 static int i2c_puppy_read_msg(const struct device *dev, struct i2c_msg *msg, uint16_t addr)
 {
 	const struct i2c_puppy_config *config = dev->config;
-	
+
 	uint32_t base = config->base;
 	uint32_t cmd_buf[I2C_CMD_BUF_SIZE];
 	uint32_t index = 0;
@@ -128,13 +120,13 @@ static int i2c_puppy_read_msg(const struct device *dev, struct i2c_msg *msg, uin
 
 	while (!plp_udma_canEnqueue(base + UDMA_CHANNEL_RX_OFFSET))
 		;
+	while (!plp_udma_canEnqueue(base + UDMA_CHANNEL_CMD_OFFSET))
+		;
 
-	k_usleep(50);
-	plp_udma_enqueue(base + UDMA_CHANNEL_CMD_OFFSET, (uint32_t)cmd_buf, index * 4,
-			 UDMA_CHANNEL_CFG_SIZE_32);
-	k_usleep(50);
 	plp_udma_enqueue(base + UDMA_CHANNEL_RX_OFFSET, (uint32_t)msg->buf, msg->len,
 			 UDMA_CHANNEL_CFG_SIZE_8);
+	plp_udma_enqueue(base + UDMA_CHANNEL_CMD_OFFSET, (uint32_t)cmd_buf, index * 4,
+			 UDMA_CHANNEL_CFG_SIZE_32);
 
 	while (plp_udma_busy(base + UDMA_CHANNEL_RX_OFFSET) ||
 	       plp_udma_busy(base + UDMA_CHANNEL_CMD_OFFSET))
@@ -267,7 +259,7 @@ static DEVICE_API(i2c, i2c_puppy_driver_api) = {
 		.sda_pin = DT_INST_PROP(idx, sda_pin),                                             \
 		.scl_pin = DT_INST_PROP(idx, scl_pin),                                             \
 		.clk_dev = DEVICE_DT_GET(DT_INST_CLOCKS_CTLR(idx)),                                \
-		.clk_bits = (clock_control_subsys_t) DT_INST_CLOCKS_CELL(idx, bits),               \
+		.clk_bits = (clock_control_subsys_t)DT_INST_CLOCKS_CELL(idx, bits),                \
 	};                                                                                         \
                                                                                                    \
 	static struct i2c_puppy_data i2c_puppy_##idx##_data = {.clock_div = 0};                    \
