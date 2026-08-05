@@ -101,7 +101,10 @@ static int char_out(int c, void *ctx_p)
 void vprintk(const char *fmt, va_list ap)
 {
 	if (IS_ENABLED(CONFIG_LOG_PRINTK)) {
-		z_log_vprintk(fmt, ap);
+		if(IS_ENABLED(CONFIG_LOG_MODE_MINIMAL))
+			z_log_minimal_vprintk(fmt, ap);
+		else
+			z_log_vprintk(fmt, ap);
 		return;
 	}
 
