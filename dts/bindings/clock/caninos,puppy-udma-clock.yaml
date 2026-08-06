@@ -1,0 +1,15 @@
+# Copyright (c) 2026 Edgar Bernardi Righi
+# SPDX-License-Identifier: Apache-2.0
+
+description: Caninos Puppy Clock Controller
+
+compatible: "caninos,puppy-udma-clock"
+
+include: [clock-controller.yaml, base.yaml]
+
+properties:
+  "#clock-cells":
+    const: 1
+
+clock-cells:
+  - bits

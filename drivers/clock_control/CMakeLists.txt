@@ -49,6 +49,7 @@ zephyr_library_sources_ifdef(CONFIG_CLOCK_CONTROL_RENESAS_RZ_CGC      clock_cont
 zephyr_library_sources_ifdef(CONFIG_CLOCK_CONTROL_RENESAS_RZ_CPG      clock_control_renesas_rz_cpg.c)
 zephyr_library_sources_ifdef(CONFIG_CLOCK_CONTROL_AMBIQ               clock_control_ambiq.c)
 zephyr_library_sources_ifdef(CONFIG_CLOCK_CONTROL_PWM                 clock_control_pwm.c)
+zephyr_library_sources_ifdef(CONFIG_CLOCK_CONTROL_PUPPY               clock_control_puppy.c)
 zephyr_library_sources_ifdef(CONFIG_CLOCK_CONTROL_RPI_PICO            clock_control_rpi_pico.c)
 zephyr_library_sources_ifdef(CONFIG_CLOCK_CONTROL_NRF_HSFLL_GLOBAL    clock_control_nrf_hsfll_global.c)
 zephyr_library_sources_ifdef(CONFIG_CLOCK_CONTROL_RTS5912_SCCON       clock_control_rts5912_sccon.c)

@@ -1,0 +1,17 @@
+# Copyright (c) 2026, Edgar Bernardi Righi
+# SPDX-License-Identifier: Apache-2.0
+
+description: RISC-V CPU interrupt controller
+
+compatible: "caninos,puppy-intc"
+
+include: [interrupt-controller.yaml, base.yaml]
+
+properties:
+  reg:
+    required: true
+  "#interrupt-cells":
+    const: 1
+
+interrupt-cells:
+  - irq

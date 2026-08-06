@@ -1,0 +1,15 @@
+# Copyright (c) 2026 Caninos Loucos
+# SPDX-License-Identifier: Apache-2.0
+
+config SDHC_PUPPY
+	bool "PUPPY SDHC Driver"
+	default y
+	depends on DT_HAS_CANINOS_PUPPY_SDHC_ENABLED
+	select SDHC_SUPPORTS_NATIVE_MODE
+	help
+	  Enables the Puppy SD Host controller driver
+
+
+# Puppy UDMA needs 32 bit aligned buffers
+config SDHC_BUFFER_ALIGNMENT
+	default 4

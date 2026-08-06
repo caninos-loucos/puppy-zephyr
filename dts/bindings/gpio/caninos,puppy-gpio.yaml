@@ -11,10 +11,6 @@ properties:
       required: true
       description: mmio register space
 
-    interrupts:
-      required: true
-      description: required interrupts
-
     "#gpio-cells":
       const: 2
 

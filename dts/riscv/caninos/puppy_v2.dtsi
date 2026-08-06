@@ -1,4 +1,9 @@
-#include "puppy.dtsi"
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ */
+#include <zephyr/dt-bindings/interrupt-controller/puppy-v2-evtc.h>
+#include <zephyr/dt-bindings/clock/puppy_v2_clock.h>
+#include "puppy_common.dtsi"
 
 &soc {
 	uart0: uart@1a102080 {
@@ -6,6 +11,23 @@
 		uart-controller;
 		reg = <0x1a102080 0x54>;
 		uart-id = <0>;
+		interrupt-parent = <&evtc>; 
+		interrupts = <PUPPY_EVTC_UART0_TX_IRQ>,
+			     <PUPPY_EVTC_UART0_RX_IRQ>;
+		interrupt-names = "tx", "rx";
+		clocks = <&udma_clk PUPPY_UDMA_CLK_UART0>;
+	};
+
+	uart1: uart@1a102480 {
+		compatible = "caninos,puppy-uart";
+		uart-controller;
+		reg = <0x1a102480 0x54>;
+		uart-id = <1>;
+		interrupt-parent = <&evtc>; 
+		interrupts = <PUPPY_EVTC_UART1_TX_IRQ>,
+			     <PUPPY_EVTC_UART1_RX_IRQ>;
+		interrupt-names = "tx", "rx";
+		clocks = <&udma_clk PUPPY_UDMA_CLK_UART1>;
 	};
 
 	spi0: spi@1a102100 {
@@ -14,6 +36,11 @@
 		#size-cells = <0>;
 		reg = <0x1a102100 0x28>;
 		spi-id = <0>;
+		interrupt-parent = <&evtc>;
+		interrupts = <PUPPY_EVTC_SPI0_TX_IRQ>,
+			     <PUPPY_EVTC_SPI0_RX_IRQ>;
+		interrupt-names = "tx", "rx";
+		clocks = <&udma_clk PUPPY_UDMA_CLK_SPI0>;
 	};
 
 	spi1: spi@1a102180 {
@@ -22,6 +49,11 @@
 		#size-cells = <0>;
 		reg = <0x1a102180 0x28>;
 		spi-id = <1>;
+		interrupt-parent = <&evtc>;
+		interrupts = <PUPPY_EVTC_SPI1_TX_IRQ>,
+			     <PUPPY_EVTC_SPI1_RX_IRQ>;
+		interrupt-names = "tx", "rx";
+		clocks = <&udma_clk PUPPY_UDMA_CLK_SPI1>;
 	};
 
 	i2c0: i2c@1a102200 {
@@ -30,6 +62,13 @@
 		#size-cells = <0>;
 		reg = <0x1a102200 0x34>;
 		i2c-id = <0>;
+		sda-pin = <26>;
+		scl-pin = <27>;
+		interrupt-parent = <&evtc>;
+		interrupts = <PUPPY_EVTC_I2C0_RX_IRQ>,
+			     <PUPPY_EVTC_I2C0_EOT_IRQ>;
+		interrupt-names = "rx", "eot";
+		clocks = <&udma_clk PUPPY_UDMA_CLK_I2C0>;
 	};
 
 	i2c1: i2c@1a102280 {
@@ -38,12 +77,19 @@
 		#size-cells = <0>;
 		reg = <0x1a102280 0x34>;
 		i2c-id = <1>;
+		sda-pin = <9>;
+		scl-pin = <10>;
+		interrupt-parent = <&evtc>;
+		interrupts = <PUPPY_EVTC_I2C1_RX_IRQ>,
+			     <PUPPY_EVTC_I2C1_EOT_IRQ>;
+		interrupt-names = "rx", "eot";
+		clocks = <&udma_clk PUPPY_UDMA_CLK_I2C1>;
 	};
 
-	uart1: uart@1a102480 {
-		compatible = "caninos,puppy-uart";
-		uart-controller;
-		reg = <0x1a102480 0x54>;
-		uart-id = <1>;
+	sdhc: sdhc@1a102300 {
+		compatible = "caninos,puppy-sdhc";
+		reg = <0x1a102300 0x80>;
+		dat0-gpios = <&gpio0 22 GPIO_ACTIVE_LOW>;
+		clocks = <&udma_clk PUPPY_UDMA_CLK_SDIO>;
 	};
 };

@@ -1132,6 +1132,31 @@ static int bosch_bmi323_init(const struct device *dev)
 	if (ret < 0) {
 		LOG_WRN("Failed to enable device pm runtime");
 	}
+
+	ret = bosch_bmi323_bus_init(dev);
+
+	if (ret < 0) {
+		LOG_WRN("Failed to init bus");
+
+		return ret;
+	}
+
+	ret = bosch_bmi323_validate_chip_id(dev);
+
+	if (ret < 0) {
+		LOG_WRN("Failed to validate chip id");
+
+		return ret;
+	}
+	
+	ret = bosch_bmi323_enable_feature_engine(dev);
+
+	if (ret < 0) {
+		LOG_WRN("Failed to enable feature engine");
+
+		return ret;
+	}
+
 #endif /* CONFIG_PM_DEVICE_RUNTIME */
 
 	return ret;

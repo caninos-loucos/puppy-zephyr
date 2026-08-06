@@ -7,34 +7,38 @@
 #include "bmi323.h"
 #include <zephyr/device.h>
 #include <zephyr/drivers/i2c.h>
+#include <stdlib.h>
 #include <errno.h>
-
-static uint8_t rx[2 * 2048];
 
 static int bosch_bmi323_i2c_read_words(const void *context, uint8_t offset,
 				       uint16_t *words, uint16_t words_count)
 {
 	const struct i2c_dt_spec *i2c = (const struct i2c_dt_spec *)context;
-	size_t len = (size_t)words_count * 2U + 2U; // words -> bytes and space for first dummy word
-
-	if (!device_is_ready(i2c->bus)) {
-		return -ENODEV;
+	int len = words_count * 2 + 2; // Add space for first dummy word
+	int ret;
+	uint8_t *rx = (uint8_t*)calloc(len, sizeof(uint8_t));
+	if (rx == NULL) {
+		printk("Could not get this fucking shit");
+		return -ENOMEM;
 	}
+	rx[0] = offset;
 
-	if (len > sizeof(rx)) {
-		printf("abc %d \n\r",len);
-		return -EINVAL;
-	}
-	
-	int ret = i2c_burst_read_dt(i2c, offset, rx, len); 
+	// have to send a dummy write
+	ret = i2c_write_dt(i2c, rx, 1);
 
 	if (ret < 0) {
 		return ret;
 	}
 
-	memcpy(words, rx+2, len - 2U); // ignore first dummy word
+	ret = i2c_read_dt(i2c, rx, len); 
 
-	k_usleep(2);
+	if (ret < 0) {
+		return ret;
+	}
+
+	memcpy(words, rx + 2, len - 2);
+
+	free(rx);
 
 	return 0;
 }
@@ -43,22 +47,8 @@ static int bosch_bmi323_i2c_write_words(const void *context, uint8_t offset,
 					uint16_t *words, uint16_t words_count)
 {
 	const struct i2c_dt_spec *i2c = (const struct i2c_dt_spec *)context;
-	uint8_t tx[1 + 2 * 64];
-	size_t len = (size_t)words_count * 2U + 1U; // words -> bytes and space for reg address/offset (first word)
 
-	if (!device_is_ready(i2c->bus)) {
-		return -ENODEV;
-	}
-
-	if (len > sizeof(tx)) {
-		return -EINVAL;
-	}
-
-	tx[0] = offset;
-
-	memcpy(tx+1, words, len - 1U);
-
-	int ret = i2c_write_dt(i2c, tx, len);
+	int ret = i2c_burst_write_dt(i2c, offset, (uint8_t *)words, words_count * 2);
 
 	k_usleep(2);
 
@@ -68,6 +58,7 @@ static int bosch_bmi323_i2c_write_words(const void *context, uint8_t offset,
 static int bosch_bmi323_i2c_init(const void *context)
 {
 	const struct i2c_dt_spec *i2c = (const struct i2c_dt_spec *)context;
+	
 	if (!device_is_ready(i2c->bus)) {
 		return -ENODEV;
 	}
