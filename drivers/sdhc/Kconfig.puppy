@@ -6,10 +6,6 @@ config SDHC_PUPPY
 	default y
 	depends on DT_HAS_CANINOS_PUPPY_SDHC_ENABLED
 	select SDHC_SUPPORTS_NATIVE_MODE
+	select GPIO
 	help
-	  Enables the Puppy SD Host controller driver
-
-
-# Puppy UDMA needs 32 bit aligned buffers
-config SDHC_BUFFER_ALIGNMENT
-	default 4
+	  Puppy SD Host controller driver

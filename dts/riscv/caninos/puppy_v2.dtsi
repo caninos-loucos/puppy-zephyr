@@ -86,7 +86,7 @@
 		clocks = <&udma_clk PUPPY_UDMA_CLK_I2C1>;
 	};
 
-	sdhc: sdhc@1a102300 {
+	sdhc0: sdhc@1a102300 {
 		compatible = "caninos,puppy-sdhc";
 		reg = <0x1a102300 0x80>;
 		dat0-gpios = <&gpio0 22 GPIO_ACTIVE_LOW>;
