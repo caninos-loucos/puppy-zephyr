@@ -49,7 +49,6 @@ static int i2c_puppy_send_addr(const struct device *dev, uint16_t addr, uint16_t
 	cmd_buf[index++] = I2C_CMD_CFG | data->clock_div;
 	cmd_buf[index++] = I2C_CMD_START;
 	cmd_buf[index++] = I2C_CMD_WRB | i2c_data;
-	cmd_buf[index++] = I2C_CMD_EOT;
 
 	while (!plp_udma_canEnqueue(base + UDMA_CHANNEL_CMD_OFFSET))
 		;
@@ -70,7 +69,10 @@ static int i2c_puppy_write_msg(const struct device *dev, struct i2c_msg *msg, ui
 	uint32_t base = config->base;
 	uint32_t cmd_buf[I2C_CMD_BUF_SIZE];
 	int index = 0;
-	i2c_puppy_send_addr(dev, addr, I2C_W_FLAG);
+
+	if (msg->flags & I2C_MSG_RESTART) {
+		i2c_puppy_send_addr(dev, addr, I2C_W_FLAG);
+	}
 
 	cmd_buf[index++] = I2C_CMD_CFG | data->clock_div;
 
@@ -100,12 +102,16 @@ static int i2c_puppy_write_msg(const struct device *dev, struct i2c_msg *msg, ui
 static int i2c_puppy_read_msg(const struct device *dev, struct i2c_msg *msg, uint16_t addr)
 {
 	const struct i2c_puppy_config *config = dev->config;
-
+	struct i2c_puppy_data *data = dev->data;
 	uint32_t base = config->base;
 	uint32_t cmd_buf[I2C_CMD_BUF_SIZE];
 	uint32_t index = 0;
 
-	i2c_puppy_send_addr(dev, addr, I2C_R_FLAG);
+	if (msg->flags & I2C_MSG_RESTART) {
+		i2c_puppy_send_addr(dev, addr, I2C_R_FLAG);
+	}
+
+	cmd_buf[index++] = I2C_CMD_CFG | data->clock_div;
 
 	if (msg->len > 1) {
 		cmd_buf[index++] = I2C_CMD_RPT | (msg->len - 1);
@@ -117,6 +123,8 @@ static int i2c_puppy_read_msg(const struct device *dev, struct i2c_msg *msg, uin
 	if (msg->flags & I2C_MSG_STOP) {
 		cmd_buf[index++] = I2C_CMD_STOP;
 	}
+
+	cmd_buf[index++] = I2C_CMD_EOT;
 
 	while (!plp_udma_canEnqueue(base + UDMA_CHANNEL_RX_OFFSET))
 		;
@@ -201,6 +209,12 @@ static int i2c_puppy_transfer(const struct device *dev, struct i2c_msg *msgs, ui
 	if (msgs == NULL) {
 		return -EINVAL;
 	}
+
+	if (num_msgs == 0) {
+		return 0;
+	}
+
+	msgs[0].flags |= I2C_MSG_RESTART;
 
 	for (int i = 0; i < num_msgs; i++) {
 		if (msgs[i].flags & I2C_MSG_READ) {
