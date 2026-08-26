@@ -9,6 +9,8 @@
 #ifndef __SDHC_PUPPY_H__
 #define __SDHC_PUPPY_H__
 
+#define CLK_DIV_VALID BIT(8)
+
 //  CMD_OP bit position in SDIO_CMD_OP
 #define CMD_OP_OFST 8
 

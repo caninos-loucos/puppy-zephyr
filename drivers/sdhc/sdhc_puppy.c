@@ -19,28 +19,29 @@ LOG_MODULE_REGISTER(sdhc_puppy);
 #include "sdhc_puppy.h"
 
 struct sdhc_puppy_t {
-	uint32_t SDIO_RX_SADDR;     /* 0x0 */
-	uint32_t SDIO_RX_SIZE;      /* 0x4 */
-	uint32_t SDIO_RX_CFG;       /* 0x8 */
-	uint32_t SDIO_RX_INITCFG;   /* 0xC */
-	uint32_t SDIO_TX_SADDR;     /* 0x10 */
-	uint32_t SDIO_TX_SIZE;      /* 0x14 */
-	uint32_t SDIO_TX_CFG;       /* 0x18 */
-	uint32_t SDIO_TX_INITCFG;   /* 0x1C */
-	uint32_t SDIO_CMD_OP;       /* 0x20 */
-	uint32_t SDIO_CMD_ARG;      /* 0x24 */
-	uint32_t SDIO_DATA_SETUP;   /* 0x28 */
-	uint32_t SDIO_START;        /* 0x2c */
-	uint32_t SDIO_RSP0;         /* 0x30 */
-	uint32_t SDIO_RSP1;         /* 0x34 */
-	uint32_t SDIO_RSP2;         /* 0x38 */
-	uint32_t SDIO_RSP3;         /* 0x3c */
-	uint32_t SDIO_CLK_DIV;      /* 0x40 */
-	uint32_t SDIO_STATUS;       /* 0x44 */
-	uint32_t SDIO_STOPCMD_OP;   /* 0x48 */
-	uint32_t SDIO_STOPCMD_ARG;  /* 0x4c */
-	uint32_t SDIO_DATA_TIMEOUT; /* 0x50 */
-	uint32_t SDIO_BLOCKS_LEFT;  /* 0x54 */
+	uint32_t SDIO_RX_SADDR;     /* 0x0 RW */
+	uint32_t SDIO_RX_SIZE;      /* 0x4 RW */
+	uint32_t SDIO_RX_CFG;       /* 0x8 RW */
+	uint32_t SDIO_RX_INTCFG;    /* 0xC */
+	uint32_t SDIO_TX_SADDR;     /* 0x10 RW */
+	uint32_t SDIO_TX_SIZE;      /* 0x14 RW */
+	uint32_t SDIO_TX_CFG;       /* 0x18 RW */
+	uint32_t SDIO_TX_INTCFG;    /* 0x1C */
+	uint32_t SDIO_CMD_OP;       /* 0x20 W */
+	uint32_t SDIO_CMD_ARG;      /* 0x24 W */
+	uint32_t SDIO_DATA_SETUP;   /* 0x28 W */
+	uint32_t SDIO_START;        /* 0x2c W */
+	uint32_t SDIO_RSP0;         /* 0x30 R */
+	uint32_t SDIO_RSP1;         /* 0x34 R */
+	uint32_t SDIO_RSP2;         /* 0x38 R */
+	uint32_t SDIO_RSP3;         /* 0x3c R */
+	uint32_t SDIO_CLK_DIV;      /* 0x40 RW */
+	uint32_t SDIO_STATUS;       /* 0x44 RW */
+	uint32_t SDIO_STOPCMD_OP;   /* 0x48 W */
+	uint32_t SDIO_STOPCMD_ARG;  /* 0x4c W */
+	uint32_t SDIO_DATA_TIMEOUT; /* 0x50 RW - V3 */
+	uint32_t SDIO_BLOCKS_LEFT;  /* 0x54 R - V3*/
+	uint32_t SDIO_BUSY_TIMEOUT; /* 0x58 - RW - V3 */
 };
 
 struct sdhc_puppy_config {
@@ -63,7 +64,7 @@ void set_clk_div(const struct sdhc_puppy_config *config, int freq)
 	uint32_t periph_freq = sys_clock_hw_cycles_per_sec();
 	uint32_t div = periph_freq / (freq * 2);
 
-	config->sdhc->SDIO_CLK_DIV = (1 << 8) | (div & 0xff);
+	config->sdhc->SDIO_CLK_DIV = CLK_DIV_VALID | (div & 0xff);
 }
 
 void release_padpull()
@@ -90,11 +91,11 @@ static int sdhc_puppy_reset(const struct device *dev)
 {
 	const struct sdhc_puppy_config *config = dev->config;
 
-	pull_padpull();
+	release_padpull();
 
 	k_usleep(100);
 
-	release_padpull();
+	pullUP_padpull();
 
 	/* Clear Status bits */
 	config->sdhc->SDIO_STATUS = EOT_MASK | ERROR_MASK;
@@ -112,6 +113,12 @@ void send_data(const struct sdhc_puppy_config *dev_config, struct sdhc_puppy_dat
 {
 	uint32_t response;
 	int direction;
+
+	/* Clear Status bits */
+	dev_config->sdhc->SDIO_STATUS = EOT_MASK | ERROR_MASK;
+
+	LOG_DBG("Sending Comand %d with rsp %d and arg %x. Data %s", cmd->opcode,
+		cmd->response_type, cmd->arg, (data == NULL) ? "absent" : "present");
 
 	switch (cmd->response_type) {
 	case (SD_RSP_TYPE_NONE):
@@ -139,9 +146,8 @@ void send_data(const struct sdhc_puppy_config *dev_config, struct sdhc_puppy_dat
 		break;
 	};
 
-	dev_config->sdhc->SDIO_CMD_OP = cmd->opcode << CMD_OP_OFST | response;
+	dev_config->sdhc->SDIO_CMD_OP = (cmd->opcode << CMD_OP_OFST) | response;
 	dev_config->sdhc->SDIO_CMD_ARG = cmd->arg;
-	dev_config->sdhc->SDIO_START = 1;
 
 	if (data != NULL) {
 		/* direction 1 is read, 0 is write */
@@ -150,19 +156,29 @@ void send_data(const struct sdhc_puppy_config *dev_config, struct sdhc_puppy_dat
 				    ? 1
 				    : 0;
 
-		plp_udma_enqueue(direction ? dev_config->sdhc->SDIO_RX_SADDR
-					   : dev_config->sdhc->SDIO_TX_SADDR,
-				 (uint32_t)data->data, data->block_size * data->blocks,
-				 UDMA_CHANNEL_CFG_EN | UDMA_CHANNEL_CFG_SIZE_32);
-
 		dev_config->sdhc->SDIO_DATA_SETUP =
 			(BLOCK_SIZE(data->block_size) | BLOCK_NUM((data->blocks - 1)) |
 			 DATA_QUAD((dev_data->io.bus_width == 4) ? 1 : 0) |
 			 DATA_RWN(direction ? 1 : 0) | DATA_EN(1));
 
+		while (!plp_udma_canEnqueue(direction ? dev_config->sdhc->SDIO_RX_SADDR
+						      : dev_config->sdhc->SDIO_TX_SADDR))
+			;
+
+		plp_udma_enqueue(direction ? dev_config->sdhc->SDIO_RX_SADDR
+					   : dev_config->sdhc->SDIO_TX_SADDR,
+				 (uint32_t)data->data, data->block_size * data->blocks,
+				 UDMA_CHANNEL_CFG_EN | UDMA_CHANNEL_CFG_SIZE_32);
+
+		while (plp_udma_busy(direction ? dev_config->sdhc->SDIO_RX_SADDR
+					       : dev_config->sdhc->SDIO_TX_SADDR))
+			;
+
 		/* Set data timeout in sdio clock cycles */
 		dev_config->sdhc->SDIO_DATA_TIMEOUT = data->timeout_ms * dev_data->io.clock / 1000;
 	}
+
+	dev_config->sdhc->SDIO_START = 1;
 }
 
 static int sdhc_puppy_request(const struct device *dev, struct sdhc_command *cmd,
@@ -174,7 +190,6 @@ static int sdhc_puppy_request(const struct device *dev, struct sdhc_command *cmd
 
 retry:
 	send_data(dev_config, dev_data, cmd, data);
-	while ((dev_config->sdhc->SDIO_STATUS & (ERROR_MASK & EOT_MASK)) == 0);
 
 	dev_config->sdhc->SDIO_DATA_SETUP = 0;
 
@@ -218,18 +233,13 @@ retry:
 	case (SD_RSP_TYPE_R6):
 	case (SD_RSP_TYPE_R7):
 	default:
-		cmd->response[0] = dev_config->sdhc->SDIO_RSP0; // ver se ja tá shiftado
-		cmd->response[1] = dev_config->sdhc->SDIO_RSP1;
-		cmd->response[2] = dev_config->sdhc->SDIO_RSP2;
-		cmd->response[3] = dev_config->sdhc->SDIO_RSP3;
+		cmd->response[0] = dev_config->sdhc->SDIO_RSP0;
 		break;
 	case (SD_RSP_TYPE_R2):
-		cmd->response[0] =
-			dev_config->sdhc
-				->SDIO_RSP0; // precisa mesmo trocar a endianness nesse caso?
-		cmd->response[1] = dev_config->sdhc->SDIO_RSP1;
-		cmd->response[2] = dev_config->sdhc->SDIO_RSP2;
-		cmd->response[3] = dev_config->sdhc->SDIO_RSP3;
+		cmd->response[0] = dev_config->sdhc->SDIO_RSP3;
+		cmd->response[1] = dev_config->sdhc->SDIO_RSP2;
+		cmd->response[2] = dev_config->sdhc->SDIO_RSP1;
+		cmd->response[3] = dev_config->sdhc->SDIO_RSP0;
 		break;
 	};
 
@@ -334,19 +344,21 @@ static int sdhc_puppy_card_busy(const struct device *dev)
 		return -ENODEV;
 	}
 
-	ret = gpio_pin_configure_dt(&config->dat0_gpio,
-				    GPIO_INPUT | GPIO_ACTIVE_LOW | GPIO_PULL_UP);
-
-	if (ret) {
-		LOG_ERR("Could not set dat0 as gpio, %d", ret);
-		return ret;
-	}
+	/* Change pad to GPIO */
+	config_pad_func(22, 0x1);
 
 	busy = gpio_pin_get_dt(&config->dat0_gpio);
-	/* Return to SDHC pad */
+	LOG_DBG("Card is %s", (busy == 1) ? "free" : "busy");
+
+	/* Return to SDHC */
 	config_pad_func(22, 0x0);
 
 	return busy;
+}
+
+static int sdhc_puppy_card_present(const struct device *dev)
+{
+	return 1;
 }
 
 static DEVICE_API(sdhc, sdhc_puppy_driver_api) = {
@@ -355,11 +367,13 @@ static DEVICE_API(sdhc, sdhc_puppy_driver_api) = {
 	.set_io = sdhc_puppy_set_io,
 	.get_host_props = sdhc_puppy_get_host_props,
 	.card_busy = sdhc_puppy_card_busy,
+	.get_card_present = sdhc_puppy_card_present,
 };
 
 static int sdhc_puppy_init(const struct device *dev)
 {
 	const struct sdhc_puppy_config *config = dev->config;
+	struct sdhc_puppy_data *data = dev->data;
 
 	int ret = clock_control_on(config->clk_dev, config->clk_bits);
 	if (ret != 0) {
@@ -379,6 +393,22 @@ static int sdhc_puppy_init(const struct device *dev)
 	/* Clear Status bits */
 	config->sdhc->SDIO_STATUS = EOT_MASK | ERROR_MASK;
 
+	/* DAT0 to read BUSY */
+	ret = gpio_pin_configure_dt(&config->dat0_gpio,
+				    GPIO_INPUT | GPIO_ACTIVE_LOW);
+
+	config_pad_func(20, 0x0);
+	config_pad_func(21, 0x0);
+	config_pad_func(22, 0x0);
+	config_pad_func(23, 0x0);
+	config_pad_func(24, 0x0);
+	config_pad_func(25, 0x0);
+	
+	/* Turn SD clock on */
+	set_clk_div(config, data->io.clock);
+
+	release_padpull();
+
 	return 0;
 }
 
@@ -393,7 +423,7 @@ static int sdhc_puppy_init(const struct device *dev)
 	};                                                                                         \
                                                                                                    \
 	struct sdhc_puppy_data sdhc_puppy_##idx##_data = {                                         \
-		.io = {.clock = SD_CLOCK_25MHZ,                                                    \
+		.io = {.clock = SDMMC_CLOCK_400KHZ,                                                \
 		       .timing = SDHC_TIMING_LEGACY,                                               \
 		       .power_mode = SDHC_POWER_ON,                                                \
 		       .bus_width = SDHC_BUS_WIDTH1BIT,                                            \
@@ -403,22 +433,11 @@ static int sdhc_puppy_init(const struct device *dev)
 		.props = {.f_max = sys_clock_hw_cycles_per_sec(),                                  \
 			  .f_min = sys_clock_hw_cycles_per_sec() / 255,                            \
 			  .is_spi = false,                                                         \
-			  .power_delay = 1,                                                        \
-			  .host_caps = {.vol_180_support = false,                                  \
-					.vol_300_support = false,                                  \
-					.vol_330_support = true,                                   \
-					.suspend_res_support = false,                              \
+			  .power_delay = 10,                                                       \
+			  .host_caps = {.vol_330_support = true,                                   \
 					.sdma_support = true,                                      \
 					.high_spd_support = true,                                  \
-					.adma_2_support = false,                                   \
-					.max_blk_len = 0,                                          \
-					.ddr50_support = false,                                    \
-					.sdr104_support = false,                                   \
-					.sdr50_support = false,                                    \
-					.bus_8_bit_support = false,                                \
-					.bus_4_bit_support = true,                                 \
-					.hs200_support = false,                                    \
-					.hs400_support = false}}};                                 \
+					.bus_4_bit_support = true}}};                              \
                                                                                                    \
 	DEVICE_DT_INST_DEFINE(idx, sdhc_puppy_init, NULL, &sdhc_puppy_##idx##_data,                \
 			      &sdhc_puppy_##idx##_config, POST_KERNEL, CONFIG_SDHC_INIT_PRIORITY,  \
