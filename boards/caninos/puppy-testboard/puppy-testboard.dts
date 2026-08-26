@@ -102,7 +102,7 @@
 	clock-frequency = <100000>;
 };
 
-&sdhc {
+&sdhc0 {
 		mmc {
 			compatible = "zephyr,sdmmc-disk";
 			disk-name = "SD";
