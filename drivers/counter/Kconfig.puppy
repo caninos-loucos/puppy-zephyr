@@ -1,0 +1,8 @@
+# Copyright (c) 2026 Caninos Loucos <ana.forcelli@lsitec.org.br>
+# SPDX-License-Identifier: Apache-2.0
+
+config COUNTER_PUPPY
+        bool "Counter Puppy"
+        default y
+	help
+	  Enable the Caninos Counter driver.
