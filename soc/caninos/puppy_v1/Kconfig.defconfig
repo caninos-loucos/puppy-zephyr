@@ -56,6 +56,10 @@ config CLOCK_CONTROL
 	bool
 	default y
 
+config COUNTER
+	bool
+	default y
+
 config MP_MAX_NUM_CPUS
 	default 1
 

@@ -9,6 +9,9 @@
 
 #define PUPPY_IRQ_BASE_ADDR DT_REG_ADDR(DT_NODELABEL(intc))
 
+/* Timer configuration */
+#include "soc_timer.h"
+
 /* PAD configuration */
 #include "soc_pad.h"
 

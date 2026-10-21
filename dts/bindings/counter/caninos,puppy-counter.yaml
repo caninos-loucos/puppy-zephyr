@@ -1,0 +1,8 @@
+# Copyright (c) 2026 Edgar Bernardi Righi <edgar.righi@lsitec.org.br>
+# SPDX-License-Identifier: Apache-2.0
+
+description: Puppy counter
+
+compatible: "caninos,puppy-counter"
+
+include: base.yaml

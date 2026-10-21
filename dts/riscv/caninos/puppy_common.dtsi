@@ -68,14 +68,12 @@
 			interrupt-parent = <&intc>;
 			interrupts = <PUPPY_INTC_TIMER_LO_IRQ>;
 			status = "okay";
-		};
 
-		counter0: counter@1a10b000 {
-			compatible = "caninos,counter-puppy";
-			reg = <0x1a10b000 0x28>;
-			interrupt-parent = <&intc>;
-			interrupts = <PUPPY_INTC_TIMER_HI_IRQ>;
-			status = "okay";
+			counter0: counter {
+				compatible = "caninos,puppy-counter";
+				interrupts = <PUPPY_INTC_TIMER_HI_IRQ>;
+				status = "okay";
+			};
 		};
 
 		gpio0: gpio@1a101000 {
