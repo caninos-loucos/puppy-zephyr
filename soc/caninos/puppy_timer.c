@@ -14,26 +14,13 @@
 #include <zephyr/irq.h>
 #include <soc.h>
 
-struct puppy_timer_t {
-	uint32_t CFG_LO;
-	uint32_t CFG_HI;
-	uint32_t CNT_LO;
-	uint32_t CNT_HI;
-	uint32_t CMP_LO;
-	uint32_t CMP_HI;
-	uint32_t START_LO;
-	uint32_t START_HI;
-	uint32_t RESET_LO;
-	uint32_t RESET_HI;
-};
-
 #define CYC_PER_TICK \
 	(sys_clock_hw_cycles_per_sec() / CONFIG_SYS_CLOCK_TICKS_PER_SEC)
 
 static volatile uint64_t cycle_count = 0ULL;
 
-static volatile struct puppy_timer_t * const PUPPY_TIMER =
-	(volatile struct puppy_timer_t *)DT_INST_REG_ADDR(0);
+static PUPPY_TIMER_Type * const PUPPY_TIMER =
+	(PUPPY_TIMER_Type *)DT_INST_REG_ADDR(0);
 
 uint64_t sys_clock_cycle_get_64(void)
 {

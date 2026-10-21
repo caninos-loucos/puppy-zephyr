@@ -1,8 +1,11 @@
 # Copyright (c) 2026 Caninos Loucos <ana.forcelli@lsitec.org.br>
+# Copyright (c) 2026 Edgar Bernardi Righi <edgar.righi@lsitec.org.br>
 # SPDX-License-Identifier: Apache-2.0
 
 config COUNTER_PUPPY
-        bool "Counter Puppy"
-        default y
+	bool "Puppy Counter Driver"
+	default y
+	depends on DT_HAS_CANINOS_PUPPY_COUNTER_ENABLED
 	help
 	  Enable the Caninos Counter driver.
+	  Says n if not sure.
