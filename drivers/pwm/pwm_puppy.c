@@ -41,6 +41,14 @@ LOG_MODULE_REGISTER(pwm_puppy);
 #define THRESH_HI_OFFSET           16
 #define TIMER_THRESHOLD(high, low) (high << THRESH_HI_OFFSET) | low
 
+#define MODE_SET 0x0
+#define MODE_TOGGLE_CLEAR 0x1
+#define MODE_SET_CLEAR 0x2
+#define MODE_TOGGLE 0x3
+#define MODE_CLEAR 0x4
+#define MODE_TOGGLE_SET 0x5
+#define MODE_CLEAR_SET 0x6
+
 #define THRESH_MODE_OFFSET         16
 #define TIMER_CH_CFG(mode, thresh) (mode << THRESH_MODE_OFFSET) | thresh
 
@@ -136,10 +144,6 @@ static int pwm_puppy_set_cycles(const struct device *dev, uint32_t channel, uint
 		pulse /= 2;
 	}
 
-	if (period == pulse) {
-		period -= 1; // fix so 100% duty cycle does not fallback to 50% in hardware
-	}
-
 	timer_cg(config->id, 1);
 
 	sys_write32(STOP_TIMER, data->base + CMD_OFFSET);
@@ -148,7 +152,13 @@ static int pwm_puppy_set_cycles(const struct device *dev, uint32_t channel, uint
 		    data->base + CFG_OFFSET);
 
 	sys_write32(TIMER_THRESHOLD(period, 0), data->base + THRESH_OFFSET);
-	sys_write32(TIMER_CH_CFG(0x6, pulse), data->base + CH_OFFSET(channel));
+
+	if(pulse == period)
+		sys_write32(TIMER_CH_CFG(MODE_SET, 0), data->base + CH_OFFSET(channel));
+	else if (pulse == 0)
+		sys_write32(TIMER_CH_CFG(MODE_CLEAR, 0), data->base + CH_OFFSET(channel));
+	else
+		sys_write32(TIMER_CH_CFG(MODE_CLEAR_SET, pulse), data->base + CH_OFFSET(channel));
 
 	sys_write32(RESET_TIMER, data->base + CMD_OFFSET);
 	sys_write32(UPDATE_TIMER, data->base + CMD_OFFSET);
