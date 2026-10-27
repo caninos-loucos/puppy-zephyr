@@ -12,24 +12,12 @@
 		zephyr,sram = &sram;
 		zephyr,flash = &flash0;
 		zephyr,console = &uart0;
-		//zephyr,shell-uart = &uart1;
-		zephyr,uart-mcumgr = &uart0;
+		zephyr,shell-uart = &uart0;
 	};
 
 	aliases {
-		led0 = &led0;
 		mcuboot-button0 = &button0;
-		mcuboot-led0 = &led0;
 		eeprom-0 = &flash0;
-	};
-
-	leds {
-		compatible = "gpio-leds";
-
-		led0: led_0 {
-			gpios = <&gpio0 23 GPIO_ACTIVE_HIGH>; // led3 on schematics
-			label = "LED0";
-		};
 	};
 
 	buttons {
@@ -57,11 +45,11 @@
 
 	flash0: flash@0 {
 		compatible = "jedec,spi-nor";
-        status = "okay";
-        size = <DT_SIZE_M(8)>;
-        reg = <0>;
-        spi-max-frequency = <20000000>;
-        erase-block-size = <DT_SIZE_K(4)>;
+		status = "okay";
+		size = <DT_SIZE_M(8)>;
+		reg = <0>;
+		spi-max-frequency = <20000000>;
+		erase-block-size = <DT_SIZE_K(4)>;
 		write-block-size = <256>;
 
 		partitions {
@@ -69,24 +57,25 @@
 			#size-cells = <1>;
 			#address-cells = <1>;
 
-			boot_partition: partition@1000 { // 65536B for bootloader
-				reg = <0x1000 0x10000>;
+			boot_partition: partition@0 {
+				reg = <0x0 0x20000>;
 				label = "boot_partition";
 				read-only;
 			};
 
-			slot0_partition: partition@11000 { // 458752B for each image
-				reg = <0x11000 0x70000>;
+			slot0_partition: partition@20000 { 
+				reg = <0x20000 0x40000>;
 				label = "slot0";
 			};
 
-			slot1_partition: partition@71000 {
-				reg = <0x71000 0x70000>;
+			slot1_partition: partition@60000 {
+				reg = <0x60000 0x40000>;
 				label = "slot1";
 			};
 
-			user_sketch: partition@E1000 { // 262144B for sketch
-				reg = <0xE1000 0x40000>;
+			storage_partition: partition@A0000 {
+				reg = <0xA0000 0x20000>;
+				label = "storage";
 			};
 		};
 	};
@@ -103,9 +92,9 @@
 };
 
 &sdhc {
-		mmc {
-			compatible = "zephyr,sdmmc-disk";
-			disk-name = "SD";
-			status = "okay";
+	mmc {
+		compatible = "zephyr,sdmmc-disk";
+		disk-name = "SD";
+		status = "okay";
 	};
 };
