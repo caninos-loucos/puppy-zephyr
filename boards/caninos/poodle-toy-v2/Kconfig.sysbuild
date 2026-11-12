@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: Apache-2.0
+
+choice BOOTLOADER
+	default BOOTLOADER_MCUBOOT
+endchoice
+
+choice MCUBOOT_MODE
+	default MCUBOOT_MODE_SINGLE_APP_RAM_LOAD
+endchoice
+
+choice BOOT_SIGNATURE_TYPE
+	default BOOT_SIGNATURE_TYPE_NONE
+endchoice

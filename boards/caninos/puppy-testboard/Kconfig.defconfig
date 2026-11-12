@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: Apache-2.0
+
+if BOARD_PUPPY_TESTBOARD
+
+config BOOTLOADER_MCUBOOT
+	default y
+
+config MCUBOOT_GENERATE_UNSIGNED_IMAGE
+	default y
+
+choice MCUBOOT_BOOTLOADER_MODE
+	default MCUBOOT_BOOTLOADER_MODE_RAM_LOAD
+endchoice
+
+endif
