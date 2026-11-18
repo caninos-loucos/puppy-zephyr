@@ -15,6 +15,6 @@ config HWACCEL_INIT_PRIORITY
 	default 85
 
 # zephyr-keep-sorted-start
-source "drivers/misc/hwaccel/Kconfig.pulp"
+source "drivers/misc/hwaccel/Kconfig.puppy"
 
 endif

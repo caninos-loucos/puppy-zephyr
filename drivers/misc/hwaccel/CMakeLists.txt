@@ -8,4 +8,4 @@ zephyr_syscall_header(
 )
 
 zephyr_library_sources_ifdef(CONFIG_USERSPACE   hwaccel_handlers.c)
-zephyr_library_sources_ifdef(CONFIG_PULP_UDMA_FILTER pulp_udma_filter.c)
+zephyr_library_sources_ifdef(CONFIG_PUPPY_UDMA_FILTER puppy_udma_filter.c)

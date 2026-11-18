@@ -1,0 +1,7 @@
+# Copyright (c) 2026 Ana Clara Forcelli <ana.forcelli@lsitec.org.br>
+# SPDX-License-Identifier: Apache-2.0
+
+config PUPPY_UDMA_FILTER
+    bool "Enable Puppy's in-chip DSP accelerator"
+	depends on DT_HAS_CANINOS_PUPPY_UDMA_FILTER_ENABLED
+
