@@ -14,6 +14,7 @@ LOG_MODULE_REGISTER(puppy_udma_filter);
 
 #include "puppy_udma_filter.h"
 
+/* No need for __packed because all fields are 32b */
 struct puppy_udma_filter_chan {
 	uint32_t addr;
 	uint32_t cfg;
@@ -22,11 +23,12 @@ struct puppy_udma_filter_chan {
 	uint32_t len_z;
 };
 
+/* No need for __packed because all fields are 32b */
 struct puppy_udma_filter {
 	struct puppy_udma_filter_chan tx0;
 	struct puppy_udma_filter_chan tx1;
 	struct puppy_udma_filter_chan rx;
-	uint32_t au_cfg;
+	volatile uint32_t au_cfg;
 	uint32_t au_regsum;
 	uint32_t au_regmult;
 	uint32_t bincu_th;
@@ -46,13 +48,12 @@ struct puppy_udma_filter_config {
 
 struct puppy_udma_filter_data {
 	struct accel_driver_data hw_data;
-	hwaccel_irq_callback_user_data_t callback;
-	void *user_data;
-	volatile struct puppy_udma_filter *filt;
-	uint32_t current_shift;
 	bool use_shift;
 	bool use_regmult;
 	bool use_regsum;
+	uint32_t current_shift;
+	uint32_t current_au_mode;
+	volatile struct puppy_udma_filter *filt;
 };
 
 #define PUPPY_FILTER(x) (volatile struct puppy_udma_filter *)(DT_INST_REG_ADDR(x))
@@ -116,7 +117,7 @@ void calc_bytes(int *bytes, int *block_size_bytes, accel_buffer_t *buf,
 		case (0):
 			chan->len_x = buf->len[i];
 			LOG_DBG("Chan X len is %d blocks", buf->len[i]);
-			break; // does this break leave the for?
+			break;
 		case (1):
 			chan->len_y = buf->len[i];
 			LOG_DBG("Chan Y len is %d blocks", buf->len[i]);
@@ -140,16 +141,26 @@ static int puppy_udma_filter_set_buffers(const struct device *dev, accel_buffer_
 	struct puppy_udma_filter_data *data = (struct puppy_udma_filter_data *)dev->data;
 	int bytes, block_size_bytes;
 
+	bool regmult_set = false;
+	bool regsum_set = false;
+	bool shift_set = false;
+	bool b_buffer_set = false;
+	uint32_t temp_au;
+
+	temp_au = sys_read32((uint32_t)data->filt + REG_AU_CFG);
+	temp_au &= ~(0xFF << AU_SHIFT_OFFSET);
+
 	if (out_buf->fmt != in_bufs[0]->fmt) {
-		LOG_ERR("Buffer formats must match! (A: %d, OUT: %d)", in_bufs[0]->fmt,
-			out_buf->fmt);
+		LOG_ERR("First buffer and Out Buffer formats must match! (A: %d, OUT: %d)",
+			in_bufs[0]->fmt, out_buf->fmt);
 		return -EINVAL;
 	}
 
-	LOG_DBG("Buffers: \n\tA: 0x%lx dim: %d", (mem_addr_t)in_bufs[0]->buf, in_bufs[0]->dim);
-	if (nbufs == 2) {
-		LOG_DBG("\tB: 0x%lx dim: %d", (mem_addr_t)in_bufs[1]->buf, in_bufs[1]->dim);
+	LOG_DBG("Buffers:");
+	for (int i = 0; i < nbufs; i++) {
+		LOG_DBG("\t%d 0x%lx dim: %d", i, (mem_addr_t)in_bufs[i]->buf, in_bufs[i]->dim);
 	}
+
 	LOG_DBG("\tOUT: 0x%lx dim: %d", (mem_addr_t)out_buf->buf, out_buf->dim);
 
 	calc_bytes(&bytes, &block_size_bytes, in_bufs[0], &data->filt->tx0);
@@ -158,130 +169,196 @@ static int puppy_udma_filter_set_buffers(const struct device *dev, accel_buffer_
 	case (FMT_UINT32):
 	case (FMT_UINT16):
 	case (FMT_UINT8):
-		data->filt->au_cfg &= ~(0x1);
+		temp_au &= ~(BIT(AU_SIGNED_OFFSET));
 		break;
 	case (FMT_INT32):
 	case (FMT_INT16):
 	case (FMT_INT8):
-		data->filt->au_cfg |= 0x1;
+		temp_au |= BIT(AU_SIGNED_OFFSET);
 		break;
 	default:
 		break;
 	}
 
-	/* TODO: add matrix support */
+	LOG_DBG("Setting IN buffers");
+
+	LOG_DBG("IN buffer 0");
 	data->filt->tx0.cfg = in_bufs[0]->dim == 2 ? TX_CFG(TX_MODE_SLIDING, block_size_bytes >> 1)
-						   : TX_CFG(TX_MODE_LINEAR, block_size_bytes >> 1);
+						   : TX_CFG(TX_MODE_LINEAR,  block_size_bytes >> 1);
 	data->filt->tx0.addr = (uint32_t)in_bufs[0]->buf;
 
-	if (nbufs == 2) {
-		if (in_bufs[1]->fmt != in_bufs[0]->fmt) {
-			LOG_ERR("Buffer formats must match! (A: %d, B: %d)", in_bufs[0]->fmt,
-				in_bufs[1]->fmt);
+	for (int i = 1; i < nbufs; i++) {
+		LOG_DBG("IN buffer %d", i);
+
+		if (in_bufs[i]->fmt != in_bufs[0]->fmt) {
+			LOG_ERR("Buffer formats must match! (A: %d, B: %d)",
+				in_bufs[0]->fmt, in_bufs[i]->fmt);
 			return -EINVAL;
 		}
 
-		if (in_bufs[1]->dim != 0) // if not scalar
-		{
-			calc_bytes(&bytes, &block_size_bytes, in_bufs[1], &data->filt->tx1);
-			data->filt->tx1.cfg =
-				in_bufs[1]->dim == 2
-					? TX_CFG(TX_MODE_SLIDING, block_size_bytes >> 1)
-					: TX_CFG(TX_MODE_LINEAR, block_size_bytes >> 1);
-			data->filt->tx1.addr = (uint32_t)in_bufs[1]->buf;
-		} else {
-			if (data->use_regmult) {
-				data->filt->au_regmult = ((uint32_t)in_bufs[1]->buf);
-			} else if (data->use_regsum) {
-				data->filt->au_regsum = ((uint32_t)in_bufs[1]->buf);
+		if (in_bufs[i]->dim == 0) {
+			if (data->use_regmult && !regmult_set) {
+				data->filt->au_regmult = *(uint32_t*)in_bufs[i]->buf;
+				regmult_set = true;
+			} else if (data->use_regsum && !regsum_set) {
+				data->filt->au_regsum = *(uint32_t*)in_bufs[i]->buf;
+				regsum_set = true;
+			} else if (data->use_shift && !shift_set) {
+				temp_au |= *(uint32_t*)in_bufs[i]->buf << AU_SHIFT_OFFSET;
+				shift_set = true;
 			} else {
-				LOG_ERR("Invalid dimension");
+				LOG_ERR("Invalid dimension/operation");
 				return -EINVAL;
 			}
+
+		} else if (!b_buffer_set) {
+			calc_bytes(&bytes, &block_size_bytes, in_bufs[i], &data->filt->tx1);
+			data->filt->tx1.cfg =
+				in_bufs[i]->dim == 2
+					? TX_CFG(TX_MODE_SLIDING, block_size_bytes >> 1)
+					: TX_CFG(TX_MODE_LINEAR,  block_size_bytes >> 1);
+			data->filt->tx1.addr = (uint32_t)in_bufs[i]->buf;
+			b_buffer_set = true;
+			
+		} else {
+			/* Might have to check before setting the buffers instead of during the
+			 * loop*/
+			LOG_ERR("Invalid buffers, choose only up to two vectors (A and B) and up "
+				"to two scalars.");
+			return -EINVAL;
 		}
 	}
+
+	LOG_DBG("Setting OUT buffer");
 
 	calc_bytes(&bytes, &block_size_bytes, out_buf, &data->filt->rx);
 	data->filt->rx.cfg = out_buf->dim == 2 ? RX_CFG(RX_MODE_2D_ROW, block_size_bytes >> 1)
 					       : RX_CFG(RX_MODE_LINEAR, block_size_bytes >> 1);
 	data->filt->rx.addr = (uint32_t)out_buf->buf;
 
+	sys_write32(temp_au, (uint32_t)data->filt + REG_AU_CFG);
+	LOG_DBG("Config AU with AU_CFG = %x", temp_au);
+
 	return 0;
 }
 
-static int puppy_udma_filter_configure_ops(const struct device *dev, accel_hw_ops_t ops)
+static int puppy_udma_filter_configure_ops(const struct device *dev, uint32_t ops_mask)
 {
 	struct puppy_udma_filter_data *data = (struct puppy_udma_filter_data *)dev->data;
 
-	data->filt->au_cfg &= ~(0xFF << AU_MODE_OFFSET);
+	data->use_shift = false;
 
-	switch (ops) {
-	case HW_OP_SUM:
-		data->filt->au_cfg |= AU_MODE_A_PLUS_B << AU_MODE_OFFSET;
-		data->use_regsum = false;
-		data->use_regmult = false;
-		data->filt->filt_mode = 0;
-		break;
-	case HW_OP_MULT:
-		data->filt->au_cfg |= AU_MODE_AxB << AU_MODE_OFFSET;
-		data->use_regsum = false;
-		data->use_regmult = false;
-		data->filt->filt_mode = 0;
-		break;
-	case HW_OP_SUB:
-		data->filt->au_cfg |= AU_MODE_A_MINUS_B << AU_MODE_OFFSET;
-		data->use_regsum = false;
-		data->use_regmult = false;
-		data->filt->filt_mode = 0;
-		break;
-	case HW_OP_SQUARE:
-		data->filt->au_cfg |= AU_MODE_AxA << AU_MODE_OFFSET;
-		data->use_regsum = false;
-		data->use_regmult = false;
-		data->filt->filt_mode = 2;
-		break;
-	case HW_OP_SUM_SCALAR:
-		data->filt->au_cfg |= AU_MODE_A_PLUS_REGSUM << AU_MODE_OFFSET;
-		data->use_regsum = true;
-		data->use_regmult = false;
-		data->filt->filt_mode = 2;
-		break;
-	case HW_OP_MULT_SCALAR:
-		data->filt->au_cfg |= AU_MODE_AxREGMULT << AU_MODE_OFFSET;
-		data->use_regsum = false;
+	if ((ops_mask & BIT(HW_OP_MULT_SCALAR)) > 0) {
 		data->use_regmult = true;
-		data->filt->filt_mode = 2;
-		break;
-	case HW_OP_MAC:
-		data->filt->au_cfg |= AU_MODE_AxB_ACC << AU_MODE_OFFSET;
-		data->use_regsum = false;
+	} else {
 		data->use_regmult = false;
-		data->filt->filt_mode = 0;
-		break;
-	case HW_OP_SQUARE_ACC:
-		data->filt->au_cfg |= AU_MODE_AxA_ACC << AU_MODE_OFFSET;
-		data->use_regsum = false;
-		data->use_regmult = false;
-		data->filt->filt_mode = 0;
-		break;
-	case HW_OP_SQUARE_SUM:
-		data->filt->au_cfg |= AU_MODE_AxA_PLUS_B << AU_MODE_OFFSET;
-		data->use_regsum = false;
-		data->use_regmult = false;
-		data->filt->filt_mode = 0;
-		break;
-	case HW_OP_SQUARE_SUB:
-		data->filt->au_cfg |= AU_MODE_AxA_MINUS_B << AU_MODE_OFFSET;
-		data->use_regsum = false;
-		data->use_regmult = false;
-		data->filt->filt_mode = 0;
-		break;
-	default:
-		LOG_ERR("OP not supported");
-		break;
 	}
 
-	LOG_DBG("Config AU with OPS %d", ops);
+	if ((ops_mask & BIT(HW_OP_SUM_SCALAR)) > 0) {
+		data->use_regsum = true;
+	} else {
+		data->use_regsum = false;
+	}
+
+	switch (ops_mask) {
+	case BIT(HW_OP_SUM):
+		data->current_au_mode = AU_MODE_A_PLUS_B;
+		data->filt->filt_mode = 0;
+		break;
+
+	case BIT(HW_OP_SUB):
+		data->current_au_mode = AU_MODE_A_MINUS_B;
+		data->filt->filt_mode = 0;
+		break;
+
+	case BIT(HW_OP_MULT):
+		data->current_au_mode = AU_MODE_AxB;
+		data->filt->filt_mode = 0;
+		break;
+
+	case (BIT(HW_OP_MULT) | BIT(HW_OP_ACCUMULATE)):
+		data->current_au_mode = AU_MODE_AxB_ACC;
+		data->filt->filt_mode = 0;
+		break;
+
+	case (BIT(HW_OP_MULT) | BIT(HW_OP_SUM_SCALAR)):
+		data->current_au_mode = AU_MODE_AxB_PLUS_REGSUM;
+		data->filt->filt_mode = 0;
+		break;
+
+	case (BIT(HW_OP_SQUARE) | BIT(HW_OP_SUM)):
+		data->current_au_mode = AU_MODE_AxA_PLUS_B;
+		data->filt->filt_mode = 0;
+		break;
+
+	case (BIT(HW_OP_SQUARE) | BIT(HW_OP_SUB)):
+		data->current_au_mode = AU_MODE_AxA_MINUS_B;
+		data->filt->filt_mode = 0;
+		break;
+
+	case (BIT(HW_OP_MULT_SCALAR) | BIT(HW_OP_SUM)):
+		data->current_au_mode = AU_MODE_AxREGMULT_PLUS_B;
+		data->filt->filt_mode = 0;
+		break;
+
+	case (BIT(HW_OP_MULT_SCALAR) | BIT(HW_OP_SUB)):
+		data->current_au_mode = AU_MODE_AxREGMULT_MINUS_B;
+		data->filt->filt_mode = 0;
+		break;
+
+	case BIT(HW_OP_SHIFT):
+		data->use_shift = true;
+		data->current_au_mode = AU_MODE_A_PLUS_REGSUM;
+		data->filt->filt_mode = 2;
+		break;
+
+	case BIT(HW_OP_SQUARE):
+		data->current_au_mode = AU_MODE_AxA;
+		data->filt->filt_mode = 2;
+		break;
+
+	case BIT(HW_OP_SUM_SCALAR):
+		data->current_au_mode = AU_MODE_A_PLUS_REGSUM;
+		data->filt->filt_mode = 2;
+		break;
+
+	case BIT(HW_OP_MULT_SCALAR):
+		data->current_au_mode = AU_MODE_AxREGMULT;
+		data->filt->filt_mode = 2;
+		break;
+
+	case (BIT(HW_OP_MULT_SCALAR) | BIT(HW_OP_ACCUMULATE)):
+		data->current_au_mode = AU_MODE_AxREGMULT_ACC;
+		data->filt->filt_mode = 2;
+		break;
+
+	case (BIT(HW_OP_SUM_SCALAR) | BIT(HW_OP_MULT_SCALAR)):
+		data->current_au_mode = AU_MODE_AxREGMULT_PLUS_REGSUM;
+		data->filt->filt_mode = 2;
+		break;
+
+	case (BIT(HW_OP_SQUARE) | BIT(HW_OP_ACCUMULATE)):
+		data->current_au_mode = AU_MODE_AxA_ACC;
+		data->filt->filt_mode = 2;
+		break;
+
+	case (BIT(HW_OP_SQUARE) | BIT(HW_OP_SUM_SCALAR)):
+		data->current_au_mode = AU_MODE_AxA_PLUS_REGSUM;
+		data->filt->filt_mode = 2;
+		break;
+
+	default:
+		LOG_ERR("OP not supported");
+		return -EINVAL;
+	}
+
+	uint32_t temp_au = sys_read32((uint32_t)data->filt + REG_AU_CFG);
+	temp_au &= ~(0xFF << AU_MODE_OFFSET);
+	temp_au |= data->current_au_mode << AU_MODE_OFFSET;
+
+	sys_write32(temp_au, (uint32_t)data->filt + REG_AU_CFG);
+
+	LOG_DBG("Config AU with OPS %d, AU_CFG = %x, current_au_mode %x", ops_mask, data->filt->au_cfg, temp_au);
 
 	return 0;
 }
@@ -297,8 +374,8 @@ static int puppy_udma_filter_irq_callback_set(const struct device *dev,
 {
 	struct puppy_udma_filter_data *data = dev->data;
 
-	data->callback = cb;
-	data->user_data = user_data;
+	data->hw_data.cb = cb;
+	data->hw_data.user_data = user_data;
 
 	return 0;
 }
@@ -308,8 +385,8 @@ static void puppy_udma_filter_irq(void *userdata)
 	const struct device *dev = (const struct device *)userdata;
 	struct puppy_udma_filter_data *data = dev->data;
 
-	if (data->callback != NULL) {
-		data->callback(dev, data->user_data);
+	if (data->hw_data.cb != NULL) {
+		data->hw_data.cb(dev, data->hw_data.user_data);
 	}
 }
 
@@ -347,13 +424,16 @@ static struct accel_driver_api puppy_udma_filter_accel_api = {
 		return 0;                                                                          \
 	}                                                                                          \
 	static struct puppy_udma_filter_data puppy_udma_filter_##idx##_data = {                    \
-		.use_shift = 0,                                                                    \
-		.current_shift = 0,                                                                \
 		.hw_data =                                                                         \
 			{                                                                          \
 				.cb = NULL,                                                        \
 				.user_data = NULL,                                                 \
 			},                                                                         \
+		.use_shift = false,                                                                \
+		.use_regmult = false,                                                              \
+		.use_regsum = false,                                                               \
+		.current_shift = 0,                                                                \
+		.current_au_mode = 0,                                                              \
 		.filt = PUPPY_FILTER(idx),                                                         \
 	};                                                                                         \
 	const static struct puppy_udma_filter_config puppy_udma_filter_##idx##_config = {          \
@@ -361,20 +441,18 @@ static struct accel_driver_api puppy_udma_filter_accel_api = {
 			{                                                                          \
 				.caps =                                                            \
 					{                                                          \
-						.op_caps =                                         \
-							BIT(HW_OP_SUM) | BIT(HW_OP_SUB) |          \
-							BIT(HW_OP_MULT) | BIT(HW_OP_SUM_SCALAR) |  \
-							BIT(HW_OP_SUB_SCALAR) |                    \
-							BIT(HW_OP_MULT_SCALAR) |                   \
-							BIT(HW_OP_SQUARE) | BIT(HW_OP_MAC) |       \
-							BIT(HW_OP_SHIFT) | BIT(HW_OP_SQUARE_SUM) | \
-							BIT(HW_OP_SQUARE_SUB) |                    \
-							BIT(HW_OP_SQUARE_ACC),                     \
+						.op_caps = BIT(HW_OP_SUM) | BIT(HW_OP_SUB) |       \
+							   BIT(HW_OP_MULT) |                       \
+							   BIT(HW_OP_SUM_SCALAR) |                 \
+							   BIT(HW_OP_SUB_SCALAR) |                 \
+							   BIT(HW_OP_MULT_SCALAR) |                \
+							   BIT(HW_OP_SQUARE) | BIT(HW_OP_SHIFT) |  \
+							   BIT(HW_OP_ACCUMULATE),                  \
 						.fmt_caps = BIT(FMT_UINT8) | BIT(FMT_UINT16) |     \
 							    BIT(FMT_UINT32) | BIT(FMT_INT8) |      \
 							    BIT(FMT_INT16) | BIT(FMT_INT32),       \
-						.max_input_buffers = 2,                            \
-						.max_chan_dimension = 3,                           \
+						.max_input_buffers = 3,                            \
+						.max_chan_dimension = 2,                           \
 					},                                                         \
 			},                                                                         \
 		.clk_dev = DEVICE_DT_GET(DT_INST_CLOCKS_CTLR(idx)),                                \

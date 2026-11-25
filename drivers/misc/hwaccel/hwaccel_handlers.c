@@ -47,10 +47,9 @@ static inline int z_vrfy_accel_set_buffers(const struct device *dev, accel_buffe
 }
 #include <zephyr/syscalls/accel_set_buffers_mrsh.c>
 
-static inline int z_vrfy_accel_configure_ops(const struct device *dev, accel_hw_ops_t *ops_series,
-					     int nops)
+static inline int z_vrfy_accel_configure_ops(const struct device *dev, uint32_t ops)
 {
 	K_OOPS(K_SYSCALL_DRIVER_HWACCEL(dev, configure_ops));
-	return z_impl_accel_configure_ops(dev, ops_series, nops);
+	return z_impl_accel_configure_ops(dev, ops);
 }
 #include <zephyr/syscalls/accel_configure_ops_mrsh.c>
